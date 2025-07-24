@@ -1,0 +1,6 @@
+---
+globs: **/*.ts,**/*.tsx,**/*.js,**/*.jsx
+alwaysApply: false
+---
+
+use ~ for my import alias, it points to src/
