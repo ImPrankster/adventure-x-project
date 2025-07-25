@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import type { Id } from "convex/_generated/dataModel";
+import type { Id } from "@convex/_generated/dataModel";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +16,7 @@ import {
 	FormMessage,
 } from "./ui/form";
 import { useMutation } from "convex/react";
-import { api } from "convex/_generated/api";
+import { api } from "@convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
 
 interface AnswerInputProps {
