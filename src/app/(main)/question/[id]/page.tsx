@@ -109,19 +109,19 @@ export default function QuestionDetailPage() {
 
 						<div>
 							<Badge variant="destructive">你不可以这样回答</Badge>
-							<div className="mt-4 h-[200px] space-y-4 overflow-y-auto">
+							<div className="mt-4 grid grid-cols-3 gap-2">
 								{aiAnswer.length > 0 ? (
 									aiAnswer.map((aiAnswer) => (
-										<div key={aiAnswer._id}>
-											<div className="flex items-center gap-2">
+										<Card key={aiAnswer._id}>
+											<CardHeader className="flex flex-row items-center justify-between">
 												<Badge variant="secondary">{aiAnswer.aiName}</Badge>
 												<span className="text-muted-foreground text-sm">
 													{new Date(
 														aiAnswer._creationTime,
 													).toLocaleDateString()}
 												</span>
-											</div>
-											<div className="prose prose-sm max-w-none line-through">
+											</CardHeader>
+											<CardContent className="prose prose-sm line-clamp-5 max-w-none overflow-hidden line-through">
 												<Typewriter
 													onInit={(typewriter) => {
 														typewriter.typeString(aiAnswer.content).start();
@@ -130,8 +130,8 @@ export default function QuestionDetailPage() {
 														delay: 5,
 													}}
 												/>
-											</div>
-										</div>
+											</CardContent>
+										</Card>
 									))
 								) : (
 									<div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">

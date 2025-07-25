@@ -76,7 +76,9 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 								</div>
 							</CardHeader>
 							<CardContent>
-								<p className="text-sm leading-relaxed">{answer.content}</p>
+								<p className="font-serif text-sm leading-relaxed">
+									{answer.content}
+								</p>
 							</CardContent>
 						</Card>
 					),
