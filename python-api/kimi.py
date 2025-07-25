@@ -2,7 +2,7 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
-load_dotenv("../.env.local")
+load_dotenv("./.env.local")
 client = OpenAI(
     api_key = os.getenv("KIMI"),
     base_url = "https://api.moonshot.cn/v1",
