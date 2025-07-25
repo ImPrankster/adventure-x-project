@@ -10,20 +10,6 @@ export const getUserAnswersByQuestion = query({
 		questionId: v.id("question"),
 		paginationOpts: paginationOptsValidator,
 	},
-	returns: v.object({
-		page: v.array(
-			v.object({
-				_id: v.id("answer"),
-				_creationTime: v.number(),
-				questionId: v.id("question"),
-				content: v.string(),
-				userId: v.string(),
-				uniquenessRating: v.number(),
-			}),
-		),
-		isDone: v.boolean(),
-		continueCursor: v.union(v.string(), v.null()),
-	}),
 	handler: async (ctx, args) => {
 		// Verify the question exists
 		const question = await ctx.db.get(args.questionId);
@@ -38,18 +24,7 @@ export const getUserAnswersByQuestion = query({
 			.order("desc") // Most recent answers first
 			.paginate(args.paginationOpts);
 
-		return {
-			page: result.page.map((answer) => ({
-				_id: answer._id,
-				_creationTime: answer._creationTime,
-				questionId: answer.questionId,
-				content: answer.content,
-				userId: answer.userId,
-				uniquenessRating: answer.uniquenessRating,
-			})),
-			isDone: result.isDone,
-			continueCursor: result.continueCursor,
-		};
+		return result;
 	},
 });
 
@@ -60,13 +35,18 @@ export const createUserAnswer = mutation({
 	args: {
 		questionId: v.id("question"),
 		content: v.string(),
-		userId: v.string(),
 		uniquenessRating: v.number(),
 	},
 	returns: v.id("answer"),
 	handler: async (ctx, args) => {
 		// Verify the question exists
 		const question = await ctx.db.get(args.questionId);
+		const user = await ctx.auth.getUserIdentity();
+		if (!user) {
+			throw new Error("User not authenticated");
+		}
+		const userId = user.subject;
+
 		if (!question) {
 			throw new Error("Question not found");
 		}
@@ -75,7 +55,7 @@ export const createUserAnswer = mutation({
 		return await ctx.db.insert("answer", {
 			questionId: args.questionId,
 			content: args.content,
-			userId: args.userId,
+			userId: userId,
 			uniquenessRating: args.uniquenessRating,
 		});
 	},

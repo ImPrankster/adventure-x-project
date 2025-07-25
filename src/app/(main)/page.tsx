@@ -15,6 +15,7 @@ import { useQuery } from "convex/react";
 import { api as convexApi } from "@convex/_generated/api";
 import { Badge } from "~/components/ui/badge";
 import Noise from "~/components/Noise";
+import Link from "next/link";
 
 const categoryConfig = [
 	{
@@ -134,8 +135,9 @@ export default function QuestionCarousel() {
 												body: string;
 												subCategory: string;
 											}) => (
-												<div
+												<Link
 													key={question._id}
+													href={`/question/${question._id}`}
 													className="cursor-pointer rounded bg-transparent p-2 backdrop-blur-sm transition-colors duration-300 hover:bg-background/20"
 												>
 													<div className="pb-3">
@@ -153,7 +155,7 @@ export default function QuestionCarousel() {
 															{question.body}
 														</p>
 													</div>
-												</div>
+												</Link>
 											),
 										)}
 									</div>
