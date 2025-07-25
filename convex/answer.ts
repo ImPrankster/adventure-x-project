@@ -10,20 +10,6 @@ export const getUserAnswersByQuestion = query({
 		questionId: v.id("question"),
 		paginationOpts: paginationOptsValidator,
 	},
-	returns: v.object({
-		page: v.array(
-			v.object({
-				_id: v.id("answer"),
-				_creationTime: v.number(),
-				questionId: v.id("question"),
-				content: v.string(),
-				userId: v.string(),
-				uniquenessRating: v.number(),
-			}),
-		),
-		isDone: v.boolean(),
-		continueCursor: v.union(v.string(), v.null()),
-	}),
 	handler: async (ctx, args) => {
 		// Verify the question exists
 		const question = await ctx.db.get(args.questionId);
@@ -38,18 +24,7 @@ export const getUserAnswersByQuestion = query({
 			.order("desc") // Most recent answers first
 			.paginate(args.paginationOpts);
 
-		return {
-			page: result.page.map((answer) => ({
-				_id: answer._id,
-				_creationTime: answer._creationTime,
-				questionId: answer.questionId,
-				content: answer.content,
-				userId: answer.userId,
-				uniquenessRating: answer.uniquenessRating,
-			})),
-			isDone: result.isDone,
-			continueCursor: result.continueCursor,
-		};
+		return result;
 	},
 });
 
