@@ -75,7 +75,7 @@ def get_kimi_answer_by_id(question_id, question_db):
         print(f"Question id {question_id} not found.")
         return
     client = OpenAI(
-        api_key = "sk-YGb8cQL1V1HEqo80hIULa4do2uCaTvYqEwCMvIbCEHm5vg2g",
+        api_key = os.getenv("KIMI"),
         base_url = "https://api.moonshot.cn/v1",
     )
     completion = client.chat.completions.create(
