@@ -70,7 +70,6 @@ def get_kimi_answer_by_id(question_id, question_db):
     question_db: dict, 形如 {id: text}
     """
     text = question_db.get(question_id)
-    print(f"[Kimi] 获取id: {question_id}")
     if not text:
         print(f"Question id {question_id} not found.")
         return
@@ -81,14 +80,14 @@ def get_kimi_answer_by_id(question_id, question_db):
     completion = client.chat.completions.create(
         model = "kimi-k2-0711-preview",
         messages = [
-            {"role": "system", "content": "你是最常见的普通用户回答者，请用常见、不长篇大论的方式回答问题。你只需给出最常见的普通人会怎么答，不要写太多。"},
+            {"role": "system", "content": "你是最常见的小红书用户回答者，请用小红书常见、不长篇大论的方式回答问题。你只需给出最常见的普通人会怎么答，不要写太多。"},
             {"role": "user", "content": text}
         ],
         temperature = 0.6,
     )
     kimi_answer = completion.choices[0].message.content
-    print(kimi_answer)
-    # insert_ai_answer_to_convex(question_id, kimi_answer, "Kimi")
+    print("kimi回答", kimi_answer)
+    insert_ai_answer_to_convex(question_id, kimi_answer, "Kimi")
 
 def get_minimax_answer_by_id(question_id, question_db):
     """
@@ -106,23 +105,33 @@ def get_minimax_answer_by_id(question_id, question_db):
     headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
     request_body = {
         "model": "MiniMax-Text-01",
-        "tokens_to_generate": 8192,
-        "reply_constraints": {"sender_type": "BOT", "sender_name": "MM智能助理"},
+        "tokens_to_generate": 1024,
+        "reply_constraints": {
+            "sender_type": "BOT",
+            "sender_name": "简洁明了知乎用户"
+        },
         "messages": [
-            {"sender_type": "USER", "sender_name": "小明", "text": text}
+            {
+                "sender_type": "USER",
+                "sender_name": "中枢控制",
+                "text": text
+            }
         ],
         "bot_setting": [
             {
-                "bot_name": "MM智能助理",
-                "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。"
+                "bot_name": "简洁明了知乎用户",
+                "content": (
+                    "请简洁明了地回答问题，不要长篇大论。你是一个知乎的普通用户，"
+                )
             }
-        ],
+        ]
     }
+
     response = requests.post(url, headers=headers, json=request_body)
     if response.status_code == 200:
         minimax_answer = response.json().get("reply")
-        print(minimax_answer)
-        # insert_ai_answer_to_convex(question_id, minimax_answer, "MiniMax")
+        print('minimax 回答', minimax_answer)
+        insert_ai_answer_to_convex(question_id, minimax_answer, "MiniMax")
     else:
         print(f"[MiniMax ERROR] {response.status_code}: {response.text}")
 
@@ -178,7 +187,7 @@ def gen_ai_answers(req: GenAnsRequest):
 if __name__ == "__main__":
 
     # 用真实id获取Kimi和MiniMax回答并写入
-    question_id = "j979egr0zgd87scnyjcns94qn97mcc0c"
+    question_id = "j972t9h03z1qe5ddv6b6ffyyqn7mccwh"
     # 直接用该id查表获取title/body
     question = client.query("question:getQuestionById", dict(id=question_id))
     if question:
