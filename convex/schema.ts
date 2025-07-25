@@ -20,6 +20,7 @@ export default defineSchema({
 		content: v.string(),
 		userId: v.string(),
 		uniquenessRating: v.number(),
+		reasonablenessRating: v.number(),
 	})
 		.searchIndex("by_content", {
 			searchField: "content",
@@ -30,4 +31,14 @@ export default defineSchema({
 		content: v.string(),
 		aiName: v.string(),
 	}),
+	userIncentive: defineTable({
+		userId: v.string(),
+		amount: v.number(),
+	}),
+	questionUnlocked: defineTable({
+		userId: v.string(),
+		questionId: v.id("question"),
+	})
+		.index("by_user", ["userId"])
+		.index("by_question", ["questionId"]),
 });

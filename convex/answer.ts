@@ -1,6 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { internal } from "./_generated/api";
 
 /**
  * Get paginated user answers for a specific question
@@ -10,12 +11,44 @@ export const getUserAnswersByQuestion = query({
 		questionId: v.id("question"),
 		paginationOpts: paginationOptsValidator,
 	},
+	returns: v.object({
+		isUnlocked: v.boolean(),
+		page: v.array(
+			v.object({
+				_id: v.id("answer"),
+				_creationTime: v.number(),
+				questionId: v.id("question"),
+				content: v.string(),
+				userId: v.string(),
+				uniquenessRating: v.number(),
+				reasonablenessRating: v.number(),
+			}),
+		),
+		isDone: v.boolean(),
+		continueCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
+		// Get the authenticated user
+		const user = await ctx.auth.getUserIdentity();
+		if (!user) {
+			throw new Error("User not authenticated");
+		}
+		const userId = user.subject;
+
 		// Verify the question exists
 		const question = await ctx.db.get(args.questionId);
 		if (!question) {
 			throw new Error("Question not found");
 		}
+
+		// Check if the question is unlocked for this user
+		const unlockRecord = await ctx.db
+			.query("questionUnlocked")
+			.withIndex("by_user", (q) => q.eq("userId", userId))
+			.filter((q) => q.eq(q.field("questionId"), args.questionId))
+			.first();
+
+		const isUnlocked = !!unlockRecord;
 
 		// Query answers for the specific question with pagination
 		const result = await ctx.db
@@ -24,7 +57,12 @@ export const getUserAnswersByQuestion = query({
 			.order("desc") // Most recent answers first
 			.paginate(args.paginationOpts);
 
-		return result;
+		return {
+			isUnlocked,
+			page: result.page,
+			isDone: result.isDone,
+			continueCursor: result.continueCursor,
+		};
 	},
 });
 
@@ -35,7 +73,6 @@ export const createUserAnswer = mutation({
 	args: {
 		questionId: v.id("question"),
 		content: v.string(),
-		uniquenessRating: v.number(),
 	},
 	returns: v.id("answer"),
 	handler: async (ctx, args) => {
@@ -51,13 +88,32 @@ export const createUserAnswer = mutation({
 			throw new Error("Question not found");
 		}
 
+		// Generate random ratings (0-100) for uniqueness and reasonableness
+		const randomUniquenessRating = Math.floor(Math.random() * 101); // 0-100
+		const randomReasonablenessRating = Math.floor(Math.random() * 101); // 0-100
+
 		// Create the answer
-		return await ctx.db.insert("answer", {
+		const answerId = await ctx.db.insert("answer", {
 			questionId: args.questionId,
 			content: args.content,
 			userId: userId,
-			uniquenessRating: args.uniquenessRating,
+			uniquenessRating: randomUniquenessRating,
+			reasonablenessRating: randomReasonablenessRating,
 		});
+
+		// Increase user incentive for creating an answer
+		await ctx.runMutation(internal.incentive.increaseUserIncentive, {
+			userId: userId,
+			amount: 10, // Give 10 points for creating an answer
+		});
+
+		// Unlock the question for the user
+		await ctx.runMutation(internal.question.unlockQuestion, {
+			userId: userId,
+			questionId: args.questionId,
+		});
+
+		return answerId;
 	},
 });
 
@@ -74,6 +130,7 @@ export const getAnswerById = query({
 			content: v.string(),
 			userId: v.string(),
 			uniquenessRating: v.number(),
+			reasonablenessRating: v.number(),
 		}),
 		v.null(),
 	),
@@ -88,39 +145,8 @@ export const getAnswerById = query({
 			content: answer.content,
 			userId: answer.userId,
 			uniquenessRating: answer.uniquenessRating,
+			reasonablenessRating: answer.reasonablenessRating,
 		};
-	},
-});
-
-/**
- * Update an existing answer
- */
-export const updateAnswer = mutation({
-	args: {
-		id: v.id("answer"),
-		content: v.optional(v.string()),
-		uniquenessRating: v.optional(v.number()),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		const answer = await ctx.db.get(args.id);
-		if (!answer) {
-			throw new Error("Answer not found");
-		}
-
-		const updates: {
-			content?: string;
-			uniquenessRating?: number;
-		} = {};
-		if (args.content !== undefined) {
-			updates.content = args.content;
-		}
-		if (args.uniquenessRating !== undefined) {
-			updates.uniquenessRating = args.uniquenessRating;
-		}
-
-		await ctx.db.patch(args.id, updates);
-		return null;
 	},
 });
 

@@ -5,27 +5,20 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
+import { Lock } from "lucide-react";
 
 interface UserAnswerProps {
 	questionId: Id<"question">;
 }
 
 export default function UserAnswer({ questionId }: UserAnswerProps) {
-	const { results, status, loadMore } = usePaginatedQuery(
-		api.answer.getUserAnswersByQuestion,
-		{
-			questionId,
-		},
-		{
-			initialNumItems: 5,
-		},
-	);
+	const result = useQuery(api.answer.getUserAnswersByQuestion, {
+		questionId,
+		paginationOpts: { numItems: 5, cursor: null },
+	});
 
-	const handleLoadMore = () => {
-		loadMore(5);
-	};
-
-	if (status === "LoadingFirstPage") {
+	if (result === undefined) {
 		return (
 			<div className="mt-4 space-y-4">
 				<h3 className="font-semibold font-serif text-lg">用户回答</h3>
@@ -34,7 +27,29 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 		);
 	}
 
-	if (results.length === 0) {
+	const { isUnlocked, page: answers } = result;
+
+	if (!isUnlocked) {
+		return (
+			<div className="mt-4 space-y-4">
+				<h3 className="font-semibold font-serif text-lg">用户回答</h3>
+				<div className="flex items-center gap-2 rounded-lg border border-muted-foreground border-dashed p-4">
+					<Lock className="h-5 w-5 text-muted-foreground" />
+					<div className="text-muted-foreground">
+						<Badge variant="secondary" className="mb-2">
+							Question Locked
+						</Badge>
+						<p>
+							You need to answer this question first to see other users'
+							answers.
+						</p>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (answers.length === 0) {
 		return (
 			<div className="mt-4 space-y-4">
 				<h3 className="font-semibold font-serif text-lg">用户回答</h3>
@@ -50,7 +65,7 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 			<h3 className="font-semibold font-serif text-lg">用户回答</h3>
 
 			<div className="space-y-4">
-				{results.map(
+				{answers.map(
 					(answer: {
 						_id: Id<"answer">;
 						_creationTime: number;
@@ -58,6 +73,7 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 						content: string;
 						userId: string;
 						uniquenessRating: number;
+						reasonablenessRating: number;
 					}) => (
 						<Card key={answer._id} className="border border-green-400">
 							<CardHeader>
@@ -70,7 +86,10 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 											{new Date(answer._creationTime).toLocaleDateString()}
 										</span>
 										<span className="rounded bg-secondary px-2 py-1 text-xs">
-											Rating: {answer.uniquenessRating}
+											Uniqueness: {answer.uniquenessRating}
+										</span>
+										<span className="rounded bg-secondary px-2 py-1 text-xs">
+											Reasonableness: {answer.reasonablenessRating}
 										</span>
 									</div>
 								</div>
@@ -85,27 +104,18 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 				)}
 			</div>
 
-			{status === "CanLoadMore" && (
+			{!result.isDone && (
 				<div className="flex justify-center pt-4">
 					<Button
-						onClick={handleLoadMore}
+						onClick={() => {
+							// For now, we'll just show a message since we're not implementing pagination
+							alert("Load more functionality not implemented yet");
+						}}
 						variant="outline"
 						className="w-full max-w-xs"
 					>
 						Load More Answers
 					</Button>
-				</div>
-			)}
-
-			{status === "LoadingMore" && (
-				<div className="flex justify-center pt-4">
-					<div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-				</div>
-			)}
-
-			{status === "Exhausted" && (
-				<div className="pt-4 text-center text-muted-foreground text-sm">
-					No more answers to load
 				</div>
 			)}
 		</div>

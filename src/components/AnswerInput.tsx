@@ -58,7 +58,6 @@ export default function AnswerInput({
 			await createUserAnswer({
 				questionId,
 				content: data.answer,
-				uniquenessRating: 0, // Default rating, can be updated later
 			});
 
 			form.reset({ answer: "" });
