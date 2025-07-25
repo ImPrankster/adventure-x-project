@@ -20,9 +20,11 @@ export default defineSchema({
 		content: v.string(),
 		userId: v.string(),
 		uniquenessRating: v.number(),
-	}).searchIndex("by_content", {
-		searchField: "content",
-	}),
+	})
+		.searchIndex("by_content", {
+			searchField: "content",
+		})
+		.index("by_question", ["questionId"]),
 	aiAnswer: defineTable({
 		questionId: v.id("question"),
 		content: v.string(),

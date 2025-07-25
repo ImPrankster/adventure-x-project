@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 // 1. Retrieve question content by id
@@ -7,6 +7,7 @@ export const getQuestionById = query({
 	returns: v.union(
 		v.object({
 			_id: v.id("question"),
+			_creationTime: v.number(),
 			title: v.string(),
 			body: v.string(),
 			mainCategory: v.string(),
@@ -20,6 +21,7 @@ export const getQuestionById = query({
 		if (!question) return null;
 		return {
 			_id: question._id,
+			_creationTime: question._creationTime,
 			title: question.title,
 			body: question.body,
 			mainCategory: question.mainCategory,
@@ -97,5 +99,52 @@ export const searchQuestions = query({
 			subCategory: question.subCategory,
 			userId: question.userId,
 		}));
+	},
+});
+
+// 4. Retrieve AI answer by question id
+export const getAIAnswer = query({
+	args: { questionId: v.id("question") },
+	returns: v.array(
+		v.object({
+			_id: v.id("aiAnswer"),
+			_creationTime: v.number(),
+			questionId: v.id("question"),
+			content: v.string(),
+			aiName: v.string(),
+		}),
+	),
+	handler: async (ctx, args) => {
+		const aiAnswer = await ctx.db
+			.query("aiAnswer")
+			.filter((q) => q.eq(q.field("questionId"), args.questionId))
+			.collect();
+
+		if (!aiAnswer) return [];
+
+		return aiAnswer.map((aiAnswer) => ({
+			_id: aiAnswer._id,
+			_creationTime: aiAnswer._creationTime,
+			questionId: aiAnswer.questionId,
+			content: aiAnswer.content,
+			aiName: aiAnswer.aiName,
+		}));
+	},
+});
+
+// 5. Create a sample AI answer (for testing purposes)
+export const createSampleAIAnswer = mutation({
+	args: {
+		questionId: v.id("question"),
+		content: v.string(),
+		aiName: v.string(),
+	},
+	returns: v.id("aiAnswer"),
+	handler: async (ctx, args) => {
+		return await ctx.db.insert("aiAnswer", {
+			questionId: args.questionId,
+			content: args.content,
+			aiName: args.aiName,
+		});
 	},
 });
