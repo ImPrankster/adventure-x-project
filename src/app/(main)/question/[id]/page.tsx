@@ -11,6 +11,14 @@ import { useParams } from "next/navigation";
 import Typewriter from "typewriter-effect";
 import UserAnswer from "~/components/UserAnswer";
 import AnswerInput from "~/components/AnswerInput";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "~/components/ui/dialog";
 
 export default function QuestionDetailPage() {
 	const params = useParams();
@@ -113,26 +121,41 @@ export default function QuestionDetailPage() {
 							<div className="mt-4 grid grid-cols-3 gap-2">
 								{aiAnswer.length > 0 ? (
 									aiAnswer.map((aiAnswer) => (
-										<Card key={aiAnswer._id}>
-											<CardHeader className="flex flex-row items-center justify-between">
-												<Badge variant="secondary">{aiAnswer.aiName}</Badge>
-												<span className="text-muted-foreground text-sm">
-													{new Date(
-														aiAnswer._creationTime,
-													).toLocaleDateString()}
-												</span>
-											</CardHeader>
-											<CardContent className="prose prose-sm line-clamp-5 max-w-none overflow-hidden line-through">
-												<Typewriter
-													onInit={(typewriter) => {
-														typewriter.typeString(aiAnswer.content).start();
-													}}
-													options={{
-														delay: 5,
-													}}
-												/>
-											</CardContent>
-										</Card>
+										<Dialog key={aiAnswer._id}>
+											<DialogTrigger asChild>
+												<Card className="cursor-pointer">
+													<CardHeader className="flex flex-row items-center justify-between">
+														<Badge variant="secondary">{aiAnswer.aiName}</Badge>
+														<span className="text-muted-foreground text-sm">
+															{new Date(
+																aiAnswer._creationTime,
+															).toLocaleDateString()}
+														</span>
+													</CardHeader>
+													<CardContent className="prose prose-sm line-clamp-5 max-w-none overflow-hidden line-through">
+														<Typewriter
+															onInit={(typewriter) => {
+																typewriter.typeString(aiAnswer.content).start();
+															}}
+															options={{
+																delay: 5,
+															}}
+														/>
+													</CardContent>
+												</Card>
+											</DialogTrigger>
+											<DialogContent>
+												<DialogHeader>
+													<DialogTitle>{aiAnswer.aiName}</DialogTitle>
+													<DialogDescription>
+														{new Date(
+															aiAnswer._creationTime,
+														).toLocaleDateString()}
+													</DialogDescription>
+												</DialogHeader>
+												<p>{aiAnswer.content}</p>
+											</DialogContent>
+										</Dialog>
 									))
 								) : (
 									<div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">

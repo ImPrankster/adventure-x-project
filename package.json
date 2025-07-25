@@ -16,6 +16,9 @@
 	},
 	"dependencies": {
 		"@clerk/nextjs": "^6.25.5",
+		"@hookform/resolvers": "^5.1.1",
+		"@radix-ui/react-dialog": "^1.1.14",
+		"@radix-ui/react-label": "^2.1.7",
 		"@radix-ui/react-slot": "^1.2.3",
 		"@t3-oss/env-nextjs": "^0.12.0",
 		"class-variance-authority": "^0.7.1",
@@ -24,11 +27,14 @@
 		"embla-carousel-react": "^8.6.0",
 		"lucide-react": "^0.525.0",
 		"next": "^15.2.3",
+		"next-themes": "^0.4.6",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
+		"react-hook-form": "^7.61.1",
+		"sonner": "^2.0.6",
 		"tailwind-merge": "^3.3.1",
 		"typewriter-effect": "^2.22.0",
-		"zod": "^3.24.2"
+		"zod": "^4.0.10"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",

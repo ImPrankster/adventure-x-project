@@ -35,13 +35,18 @@ export const createUserAnswer = mutation({
 	args: {
 		questionId: v.id("question"),
 		content: v.string(),
-		userId: v.string(),
 		uniquenessRating: v.number(),
 	},
 	returns: v.id("answer"),
 	handler: async (ctx, args) => {
 		// Verify the question exists
 		const question = await ctx.db.get(args.questionId);
+		const user = await ctx.auth.getUserIdentity();
+		if (!user) {
+			throw new Error("User not authenticated");
+		}
+		const userId = user.subject;
+
 		if (!question) {
 			throw new Error("Question not found");
 		}
@@ -50,7 +55,7 @@ export const createUserAnswer = mutation({
 		return await ctx.db.insert("answer", {
 			questionId: args.questionId,
 			content: args.content,
-			userId: args.userId,
+			userId: userId,
 			uniquenessRating: args.uniquenessRating,
 		});
 	},
