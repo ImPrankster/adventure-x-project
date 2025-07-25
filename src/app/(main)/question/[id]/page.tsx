@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import Typewriter from "typewriter-effect";
 import UserAnswer from "~/components/UserAnswer";
+import AnswerInput from "~/components/AnswerInput";
 
 export default function QuestionDetailPage() {
 	const params = useParams();
@@ -55,7 +56,7 @@ export default function QuestionDetailPage() {
 	}
 
 	return (
-		<main className="container mx-auto max-w-4xl px-4 py-8 pt-16">
+		<main className="container mx-auto max-w-4xl space-y-4 px-4 py-8 pt-16">
 			<div className="mb-6">
 				<Link
 					href="/"
@@ -143,6 +144,10 @@ export default function QuestionDetailPage() {
 					</div>
 				</CardContent>
 			</Card>
+			<AnswerInput
+				questionId={questionId}
+				className="flex min-h-[260px] flex-col gap-2"
+			/>
 			<UserAnswer questionId={questionId} />
 		</main>
 	);

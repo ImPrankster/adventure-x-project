@@ -28,7 +28,7 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 	if (status === "LoadingFirstPage") {
 		return (
 			<div className="mt-4 space-y-4">
-				<h3 className="font-semibold text-lg">用户回答</h3>
+				<h3 className="font-semibold font-serif text-lg">用户回答</h3>
 				<div className="text-muted-foreground">Loading answers...</div>
 			</div>
 		);
@@ -37,7 +37,7 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 	if (results.length === 0) {
 		return (
 			<div className="mt-4 space-y-4">
-				<h3 className="font-semibold text-lg">用户回答</h3>
+				<h3 className="font-semibold font-serif text-lg">用户回答</h3>
 				<div className="text-muted-foreground">
 					No answers yet. Be the first to answer!
 				</div>
@@ -47,7 +47,7 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 
 	return (
 		<div className="mt-4 space-y-4">
-			<h3 className="font-semibold text-lg">用户回答</h3>
+			<h3 className="font-semibold font-serif text-lg">用户回答</h3>
 
 			<div className="space-y-4">
 				{results.map(
