@@ -1,7 +1,6 @@
-
-
 # fastapi_app.py
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import requests
@@ -11,21 +10,40 @@ from dotenv import load_dotenv
 from convex import ConvexClient
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 load_dotenv("../.env.local")
-CONVEX_URL = os.environ.get("NEXT_PUBLIC_CONVEX_URL", "https://your-convex-instance.convex.cloud/api")  # 从环境变量获取URL
-
-
+CONVEX_URL = os.environ.get(
+    "NEXT_PUBLIC_CONVEX_URL", "https://your-convex-instance.convex.cloud/api"
+)  # 从环境变量获取URL
 
 # 初始化 ConvexClient
 client = ConvexClient(CONVEX_URL)
 
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint to verify the API is running"""
+    return {"status": "healthy", "message": "API is running"}
+
+
 class InsertRequest(BaseModel):
     question_id: str
+
 
 class GenAnsRequest(BaseModel):
     question_id: Optional[str] = None
     category_name: Optional[str] = None
     # 可扩展更多参数
+
 
 def get_text_by_id(question_id):
     # 这里模拟获取 text，实际可查数据库或其他服务
@@ -47,11 +65,12 @@ def insert_ai_answer_to_convex(question_id, content, ai_name):
     try:
         inserted_id = client.mutation(
             "question:createSampleAIAnswer",
-            dict(questionId=question_id, content=content, aiName=ai_name)
+            dict(questionId=question_id, content=content, aiName=ai_name),
         )
         print(f"[Convex] 插入成功: {ai_name}, id: {inserted_id}")
     except Exception as e:
         print(f"[Convex ERROR] {ai_name}: {e}")
+
 
 def get_kimi_answer_by_id(question_id, question_db):
     """
@@ -64,20 +83,24 @@ def get_kimi_answer_by_id(question_id, question_db):
         print(f"Question id {question_id} not found.")
         return
     client = OpenAI(
-        api_key = os.getenv("KIMI"),
-        base_url = "https://api.moonshot.cn/v1",
+        api_key=os.getenv("KIMI"),
+        base_url="https://api.moonshot.cn/v1",
     )
     completion = client.chat.completions.create(
-        model = "kimi-k2-0711-preview",
-        messages = [
-            {"role": "system", "content": "你是最常见的小红书用户回答者，请用小红书常见、不长篇大论的方式回答问题。你只需给出最常见的普通人会怎么答，不要写太多。"},
-            {"role": "user", "content": text}
+        model="kimi-k2-0711-preview",
+        messages=[
+            {
+                "role": "system",
+                "content": "你是最常见的小红书用户回答者，请用小红书常见、不长篇大论的方式回答问题。你只需给出最常见的普通人会怎么答，不要写太多。",
+            },
+            {"role": "user", "content": text},
         ],
-        temperature = 0.6,
+        temperature=0.6,
     )
     kimi_answer = completion.choices[0].message.content
     print("kimi回答", kimi_answer)
     insert_ai_answer_to_convex(question_id, kimi_answer, "Kimi")
+
 
 def get_minimax_answer_by_id(question_id, question_db):
     """
@@ -92,57 +115,51 @@ def get_minimax_answer_by_id(question_id, question_db):
     group_id = os.getenv("MINIMAX_GROUP")
     api_key = os.getenv("MINIMAX")
     url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-    headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     request_body = {
         "model": "MiniMax-Text-01",
         "tokens_to_generate": 1024,
-        "reply_constraints": {
-            "sender_type": "BOT",
-            "sender_name": "简洁明了知乎用户"
-        },
-        "messages": [
-            {
-                "sender_type": "USER",
-                "sender_name": "中枢控制",
-                "text": text
-            }
-        ],
+        "reply_constraints": {"sender_type": "BOT", "sender_name": "简洁明了知乎用户"},
+        "messages": [{"sender_type": "USER", "sender_name": "中枢控制", "text": text}],
         "bot_setting": [
             {
                 "bot_name": "简洁明了知乎用户",
                 "content": (
                     "请简洁明了地回答问题，不要长篇大论。你是一个知乎的普通用户，"
-                )
+                ),
             }
-        ]
+        ],
     }
 
     response = requests.post(url, headers=headers, json=request_body)
     if response.status_code == 200:
         minimax_answer = response.json().get("reply")
-        print('minimax 回答', minimax_answer)
+        print("minimax 回答", minimax_answer)
         insert_ai_answer_to_convex(question_id, minimax_answer, "MiniMax")
     else:
         print(f"[MiniMax ERROR] {response.status_code}: {response.text}")
 
-def get_or_create_question_id(client, title, body, mainCategory, subCategory, userId=None):
+
+def get_or_create_question_id(
+    client, title, body, mainCategory, subCategory, userId=None
+):
     """
     先查找是否有相同title和body的问题，有则返回其id，否则新建并返回id。
     """
     # 查询是否已存在
-    questions = client.query(
-        "question:searchQuestions",
-        dict(keyword=title)
-    )
+    questions = client.query("question:searchQuestions", dict(keyword=title))
     for q in questions:
         if q["title"] == title and q["body"] == body:
             return q["_id"]
     # 不存在则新建
-    args = dict(title=title, body=body, mainCategory=mainCategory, subCategory=subCategory)
+    args = dict(
+        title=title, body=body, mainCategory=mainCategory, subCategory=subCategory
+    )
     if userId:
         args["userId"] = userId
     question_id = client.mutation("question:createQuestion", args)
     return question_id
+
 
 # 用法示例：
 # question_id = get_or_create_question_id(client, "你的标题", "你的内容", "主分类", "子分类")
@@ -155,8 +172,12 @@ def gen_ai_answers(req: GenAnsRequest):
     question_id = req.question_id
     if not question_id:
         if not req.category_name:
-            raise HTTPException(status_code=400, detail="question_id 或 category_name 必须提供")
-        questions = client.query("question:getQuestionsByCategoryName", dict(categoryName=req.category_name))
+            raise HTTPException(
+                status_code=400, detail="question_id 或 category_name 必须提供"
+            )
+        questions = client.query(
+            "question:getQuestionsByCategoryName", dict(categoryName=req.category_name)
+        )
         if not questions:
             raise HTTPException(status_code=404, detail="该分类下没有问题")
         question = questions[0]
@@ -173,15 +194,18 @@ def gen_ai_answers(req: GenAnsRequest):
     get_minimax_answer_by_id(question_id, question_db)
     return {"msg": "AI回答已生成并写入数据库", "question_id": question_id}
 
+
 class SimRequest(BaseModel):
     question_id: str
     user_text: str
     model: str = "kimi"  # "kimi" 或 "minimax"
 
+
 class ReasonRequest(BaseModel):
     question_id: str
     user_text: str
     score_type: str = "float"  # "float"(0-1) 或 "int"(1-100)
+
 
 class MultiSimRequest(BaseModel):
     question_id: str  # questionId
@@ -190,11 +214,13 @@ class MultiSimRequest(BaseModel):
     reason_model: str = "kimi"  # "kimi" 或 "minimax"
     score_type: str = "float"  # "float" 或 "int"
 
+
 def extract_score(text):
     """
     从模型输出中提取0-1之间的分数。
     """
     import re
+
     if not text:
         return None
     match = re.search(r"([01](?:\.\d+)?|0?\.\d+)", text)
@@ -204,11 +230,12 @@ def extract_score(text):
             return score
     return None
 
+
 @app.post("/similarity")
 def calc_similarity(req: SimRequest):
 
     ai_ans = client.query("question:getAIAnswer", dict(questionId=req.question_id))
-    
+
     print(f"AI Answer: {ai_ans}")
     if not ai_ans or not ai_ans[0]:
         raise HTTPException(status_code=404, detail="未找到AI答案")
@@ -216,38 +243,35 @@ def calc_similarity(req: SimRequest):
     prompt = f"AI的答案：{ai_text}\n用户的回答：{req.user_text}\n请你用0到1的分数严格判定两者内容的相似度，1为完全相同，0为完全不同，只返回分数，不要解释。"
     if req.model == "kimi":
         client_kimi = OpenAI(
-            api_key = os.getenv("KIMI"),
-            base_url = "https://api.moonshot.cn/v1",
+            api_key=os.getenv("KIMI"),
+            base_url="https://api.moonshot.cn/v1",
         )
         completion = client_kimi.chat.completions.create(
-            model = "kimi-k2-0711-preview",
-            messages = [
+            model="kimi-k2-0711-preview",
+            messages=[
                 {"role": "system", "content": "你是一个严格的相似度判分助手。"},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            temperature = 0.3,
+            temperature=0.3,
         )
         score = extract_score(completion.choices[0].message.content)
     elif req.model == "minimax":
         group_id = os.getenv("MINIMAX_GROUP")
         api_key = os.getenv("MINIMAX")
         url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-        headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
         request_body = {
             "model": "MiniMax-Text-01",
             "tokens_to_generate": 256,
-            "reply_constraints": {
-                "sender_type": "BOT",
-                "sender_name": "评分助理"
-            },
+            "reply_constraints": {"sender_type": "BOT", "sender_name": "评分助理"},
             "messages": [
                 {"sender_type": "USER", "sender_name": "任务调度器", "text": prompt}
             ],
             "bot_setting": [
-                {
-                    "bot_name": "评分助理",
-                    "content": "你是一个严格的相似度判分助手。"
-                }
+                {"bot_name": "评分助理", "content": "你是一个严格的相似度判分助手。"}
             ],
         }
         score = None
@@ -263,6 +287,7 @@ def calc_similarity(req: SimRequest):
         raise HTTPException(status_code=500, detail="大模型未返回有效分数")
     return {"similarity": score}
 
+
 @app.post("/reasonableness")
 def judge_reasonableness(req: ReasonRequest):
     question = client.query("question:getQuestionById", dict(id=req.question_id))
@@ -272,34 +297,32 @@ def judge_reasonableness(req: ReasonRequest):
     prompt = f"问题：{question_text}\n用户的回答：{req.user_text}\n请你用0到1的分数严格判定用户回答的合理性，1为完全合理，0为完全不合理，只返回分数，不要解释。"
     # Kimi
     client_kimi = OpenAI(
-        api_key = os.getenv("KIMI"),
-        base_url = "https://api.moonshot.cn/v1",
+        api_key=os.getenv("KIMI"),
+        base_url="https://api.moonshot.cn/v1",
     )
     kimi_resp = client_kimi.chat.completions.create(
-        model = "kimi-k2-0711-preview",
-        messages = [
+        model="kimi-k2-0711-preview",
+        messages=[
             {"role": "system", "content": "你是一个严格的答案判分助手。"},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ],
-        temperature = 0.3,
+        temperature=0.3,
     )
     kimi_score = extract_score(kimi_resp.choices[0].message.content)
     # MiniMax
     group_id = os.getenv("MINIMAX_GROUP")
     api_key = os.getenv("MINIMAX")
     url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-    headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     request_body = {
         "model": "MiniMax-Text-01",
         "tokens_to_generate": 1024,
         "reply_constraints": {"sender_type": "BOT", "sender_name": "MM智能助理"},
-        "messages": [
-            {"sender_type": "USER", "sender_name": "小明", "text": prompt}
-        ],
+        "messages": [{"sender_type": "USER", "sender_name": "小明", "text": prompt}],
         "bot_setting": [
             {
                 "bot_name": "MM智能助理",
-                "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。"
+                "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。",
             }
         ],
     }
@@ -317,21 +340,19 @@ def judge_reasonableness(req: ReasonRequest):
     avg = sum(scores) / len(scores)
     if req.score_type == "int":
         kimi_score = int(round(kimi_score * 100)) if kimi_score is not None else None
-        minimax_score = int(round(minimax_score * 100)) if minimax_score is not None else None
+        minimax_score = (
+            int(round(minimax_score * 100)) if minimax_score is not None else None
+        )
         avg = int(round(avg * 100))
-    return {
-        "kimi_score": kimi_score,
-        "minimax_score": minimax_score,
-        "average": avg
-    }
+    return {"kimi_score": kimi_score, "minimax_score": minimax_score, "average": avg}
 
 
-
-'''
+"""
 # 只需要调用这个，返回
 多重判定结果： {'similarities': [{'ai_name': 'Kimi', 'similarity': 1.0}, {'ai_name': 'MiniMax', 'similarity': 0.85}], 
 'reasonableness': [{'model': 'kimi', 'score': 0.9}, {'model': 'minimax', 'score': 1.0}]}
-'''
+"""
+
 
 @app.post("/multi_similarity_reasonableness")
 def multi_similarity_reasonableness(req: MultiSimRequest):
@@ -353,38 +374,45 @@ def multi_similarity_reasonableness(req: MultiSimRequest):
         score = None
         if req.sim_model == "kimi":
             client_kimi = OpenAI(
-                api_key = os.getenv("KIMI"),
-                base_url = "https://api.moonshot.cn/v1",
+                api_key=os.getenv("KIMI"),
+                base_url="https://api.moonshot.cn/v1",
             )
             completion = client_kimi.chat.completions.create(
-                model = "kimi-k2-0711-preview",
-                messages = [
+                model="kimi-k2-0711-preview",
+                messages=[
                     {"role": "system", "content": "你是一个严格的相似度判分助手。"},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                temperature = 0.3,
+                temperature=0.3,
             )
             score = extract_score(completion.choices[0].message.content)
         elif req.sim_model == "minimax":
             group_id = os.getenv("MINIMAX_GROUP")
             api_key = os.getenv("MINIMAX")
             url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-            headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
             sim_request_body = {
                 "model": "abab6-chat",
                 "tokens_to_generate": 1024,
-                "reply_constraints": {"sender_type": "BOT", "sender_name": "MM智能助理"},
+                "reply_constraints": {
+                    "sender_type": "BOT",
+                    "sender_name": "MM智能助理",
+                },
                 "messages": [
                     {"sender_type": "USER", "sender_name": "小明", "text": prompt}
                 ],
                 "bot_setting": [
                     {
                         "bot_name": "MM智能助理",
-                        "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。"
+                        "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。",
                     }
                 ],
             }
             import requests
+
             try:
                 response = requests.post(url, headers=headers, json=sim_request_body)
                 if response.status_code == 200:
@@ -393,30 +421,32 @@ def multi_similarity_reasonableness(req: MultiSimRequest):
                 score = None
         if req.score_type == "int" and score is not None:
             score = int(round(score * 100))
-        sim_results.append({"ai_name": ai_ans.get("aiName", "unknown"), "similarity": score})
-    
+        sim_results.append(
+            {"ai_name": ai_ans.get("aiName", "unknown"), "similarity": score}
+        )
+
     # 4. 所有AI答案+用户回答，判定合理性
     reason_prompt = f"问题：{question_text}\n用户的回答：{user_text}\n请你用0到1的分数严格判定用户回答的合理性，1为完全合理，0为完全不合理，只返回分数，不要解释。"
     reason_score_kimi = None
 
     client_kimi = OpenAI(
-        api_key = os.getenv("KIMI"),
-        base_url = "https://api.moonshot.cn/v1",
+        api_key=os.getenv("KIMI"),
+        base_url="https://api.moonshot.cn/v1",
     )
     completion = client_kimi.chat.completions.create(
-        model = "kimi-k2-0711-preview",
-        messages = [
+        model="kimi-k2-0711-preview",
+        messages=[
             {"role": "system", "content": "你是一个严格的答案判分助手。"},
-            {"role": "user", "content": reason_prompt}
+            {"role": "user", "content": reason_prompt},
         ],
-        temperature = 0.3,
+        temperature=0.3,
     )
     reason_score_kimi = extract_score(completion.choices[0].message.content)
 
     group_id = os.getenv("MINIMAX_GROUP")
     api_key = os.getenv("MINIMAX")
     url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-    headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     reason_request_body = {
         "model": "abab6-chat",
         "tokens_to_generate": 1024,
@@ -427,11 +457,12 @@ def multi_similarity_reasonableness(req: MultiSimRequest):
         "bot_setting": [
             {
                 "bot_name": "MM智能助理",
-                "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。"
+                "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。",
             }
         ],
     }
     import requests
+
     try:
         response = requests.post(url, headers=headers, json=reason_request_body)
         if response.status_code == 200:
@@ -442,38 +473,37 @@ def multi_similarity_reasonableness(req: MultiSimRequest):
         reason_score_kimi = int(round(reason_score_kimi * 100))
     if req.score_type == "int" and reason_score_mini is not None:
         reason_score_mini = int(round(reason_score_mini * 100))
-    
+
     reasonableness = []
     reasonableness.append({"model": "kimi", "score": reason_score_kimi})
     reasonableness.append({"model": "minimax", "score": reason_score_mini})
     return {
         "similarities": sim_results,
-        "reasonableness":reasonableness,
+        "reasonableness": reasonableness,
     }
 
 
-
 if __name__ == "__main__":
-    # 测试用真实id
-    # test_question_id = "j972t9h03z1qe5ddv6b6ffyyqn7mccwh"
-    # user_text = "桂林市区出发→磨盘山码头/竹江码头→漓江精华段（杨堤-兴坪）→打卡20元人民币背景→兴坪古镇吃啤酒鱼→回市区。"
+    import uvicorn
+    import argparse
 
-    # # 测试 multi_similarity_reasonableness
-    # print("=== 测试多重相似度与合理性判定 ===")
-    # multi_req = MultiSimRequest(question_id=test_question_id, user_text=user_text, sim_model="kimi", reason_model="kimi", score_type="float")
-    # try:
-    #     multi_result = multi_similarity_reasonableness(multi_req)
-    #     print("多重判定结果：", multi_result)
-    # except Exception as e:
-    #     print("多重判定出错：", e)
+    parser = argparse.ArgumentParser(
+        description="FastAPI server for AI answer generation and similarity calculation"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to run the server on (default: 8000)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="Host to bind the server to (default: 0.0.0.0)",
+    )
 
-        # 用真实id获取Kimi和MiniMax回答并写入
-    question_id = "j97amy2kgmq2v20qbn6nkpppdx7md2vz"
-    # 直接用该id查表获取title/body
-    question = client.query("question:getQuestionById", dict(id=question_id))
-    if question:
-        question_db = {question_id: question["body"]}
-        get_kimi_answer_by_id(question_id, question_db)
-        get_minimax_answer_by_id(question_id, question_db)
-    else:
-        print(f"Question id {question_id} not found in database.")
+    args = parser.parse_args()
+
+    print(f"Starting FastAPI server on {args.host}:{args.port}")
+    uvicorn.run(app, host=args.host, port=args.port)
