@@ -2,7 +2,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
-// 1. Retrieve question content by id
+// 1. Retrieve question content by id with answer counts
 export const getQuestionById = query({
 	args: { id: v.id("question") },
 	returns: v.union(
@@ -14,12 +14,20 @@ export const getQuestionById = query({
 			mainCategory: v.string(),
 			subCategory: v.string(),
 			userId: v.optional(v.string()),
+			userAnswerCount: v.number(),
 		}),
 		v.null(),
 	),
 	handler: async (ctx, args) => {
 		const question = await ctx.db.get(args.id);
 		if (!question) return null;
+
+		// Count user answers
+		const userAnswers = await ctx.db
+			.query("answer")
+			.withIndex("by_question", (q) => q.eq("questionId", args.id))
+			.collect();
+
 		return {
 			_id: question._id,
 			_creationTime: question._creationTime,
@@ -28,6 +36,7 @@ export const getQuestionById = query({
 			mainCategory: question.mainCategory,
 			subCategory: question.subCategory,
 			userId: question.userId,
+			userAnswerCount: userAnswers.length,
 		};
 	},
 });

@@ -168,6 +168,10 @@ export default function QuestionDetailPage() {
 				</CardContent>
 			</Card>
 			<AnswerInput questionId={questionId} />
+
+			<div className="flex items-center gap-2 text-muted-foreground text-sm">
+				<span>总共{question.userAnswerCount}个回答</span>
+			</div>
 			<UserAnswer questionId={questionId} />
 		</main>
 	);
