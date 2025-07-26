@@ -16,6 +16,7 @@ import { api as convexApi } from "@convex/_generated/api";
 import { Badge } from "~/components/ui/badge";
 import Noise from "~/components/Noise";
 import Link from "next/link";
+import QuestionInput from "~/components/QuestionInput";
 
 const categoryConfig = [
 	{
@@ -175,6 +176,7 @@ export default function QuestionCarousel() {
 					<CarouselNext />
 				</Carousel>
 			</div>
+			<QuestionInput />
 		</main>
 	);
 }

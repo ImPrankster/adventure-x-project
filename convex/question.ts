@@ -310,3 +310,26 @@ export const getAllQuestions = query({
 		}));
 	},
 });
+
+// 8. Internal mutation to insert a question with ratings
+export const insertQuestion = internalMutation({
+	args: {
+		title: v.string(),
+		body: v.string(),
+		mainCategory: v.string(),
+		subCategory: v.string(),
+		userId: v.string(),
+		uniquenessRating: v.number(),
+		reasonablenessRating: v.number(),
+	},
+	returns: v.id("question"),
+	handler: async (ctx, args) => {
+		return await ctx.db.insert("question", {
+			title: args.title,
+			body: args.body,
+			mainCategory: args.mainCategory,
+			subCategory: args.subCategory,
+			userId: args.userId,
+		});
+	},
+});

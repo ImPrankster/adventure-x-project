@@ -3,6 +3,7 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import OpenAI from "openai";
 
 interface SimilarityResult {
@@ -237,6 +238,196 @@ export const createAnswerWithRatings = action({
 		}
 
 		return {
+			uniquenessRating: uniquenessRating,
+			reasonablenessRating: reasonablenessRating,
+		};
+	},
+});
+
+export const createQuestionWithRatings = action({
+	args: {
+		title: v.string(),
+		body: v.string(),
+		mainCategory: v.string(),
+		subCategory: v.string(),
+	},
+	returns: v.object({
+		success: v.boolean(),
+		message: v.string(),
+		questionId: v.optional(v.id("question")),
+		uniquenessRating: v.optional(v.number()),
+		reasonablenessRating: v.optional(v.number()),
+	}),
+	handler: async (ctx, args) => {
+		const user = await ctx.auth.getUserIdentity();
+		if (!user) {
+			return {
+				success: false,
+				message: "User not authenticated",
+				questionId: undefined,
+				uniquenessRating: undefined,
+				reasonablenessRating: undefined,
+			};
+		}
+		const userId = user.subject;
+
+		// 1. Get all existing questions for similarity comparison
+		const existingQuestions = await ctx.runQuery(
+			api.question.getAllQuestions,
+			{},
+		);
+
+		if (!existingQuestions || existingQuestions.length === 0) {
+			// No existing questions, create the first one
+			const questionId: Id<"question"> = await ctx.runMutation(
+				internal.question.insertQuestion,
+				{
+					title: args.title,
+					body: args.body,
+					mainCategory: args.mainCategory,
+					subCategory: args.subCategory,
+					userId: userId,
+					uniquenessRating: 1.0, // First question gets perfect uniqueness
+					reasonablenessRating: 1.0, // First question gets perfect reasonableness
+				},
+			);
+
+			// Award incentive points for creating the first question
+			await ctx.runMutation(internal.incentive.increaseUserIncentive, {
+				userId: userId,
+				amount: 20,
+			});
+
+			return {
+				success: true,
+				message: "Question created successfully! First question in the system.",
+				questionId: questionId,
+				uniquenessRating: 1.0,
+				reasonablenessRating: 1.0,
+			};
+		}
+
+		// 2. Calculate similarity with existing questions
+		const simResults: SimilarityResult[] = [];
+
+		for (const existingQuestion of existingQuestions) {
+			// Check title similarity
+			const titlePrompt = `AI的标准问题标题：${existingQuestion.title}\n用户的问题标题：${args.title}\n请你用0到1的分数严格判定两者内容的相似度，1为完全相同，0为完全不同，只返回分数，不要解释。`;
+
+			// Check body similarity
+			const bodyPrompt = `AI的标准问题内容：${existingQuestion.body}\n用户的问题内容：${args.body}\n请你用0到1的分数严格判定两者内容的相似度，1为完全相同，0为完全不同，只返回分数，不要解释。`;
+
+			let titleScore: number | null = null;
+			let bodyScore: number | null = null;
+
+			// Use Kimi for similarity checking
+			const kimiApiKey = process.env.KIMI;
+			if (kimiApiKey) {
+				const titleResponse = await callKimiAPI(titlePrompt, kimiApiKey);
+				titleScore = extractScore(titleResponse);
+
+				const bodyResponse = await callKimiAPI(bodyPrompt, kimiApiKey);
+				bodyScore = extractScore(bodyResponse);
+			}
+
+			// Calculate average similarity (title and body weighted equally)
+			const avgSimilarity =
+				titleScore !== null && bodyScore !== null
+					? (titleScore + bodyScore) / 2
+					: null;
+
+			simResults.push({
+				ai_name: `question_${existingQuestion._id}`,
+				similarity: avgSimilarity,
+			});
+		}
+
+		// 3. Check reasonableness of the question
+		const reasonPrompt = `问题标题：${args.title}\n问题内容：${args.body}\n问题分类：${args.mainCategory} - ${args.subCategory}\n请你用0到1的分数严格判定这个问题的合理性，1为完全合理，0为完全不合理，只返回分数，不要解释。`;
+
+		let reasonScoreKimi: number | null = null;
+		let reasonScoreMini: number | null = null;
+
+		// Kimi reasonableness rating
+		const kimiApiKey = process.env.KIMI;
+		if (kimiApiKey) {
+			const response = await callKimiAPI(reasonPrompt, kimiApiKey);
+			reasonScoreKimi = extractScore(response);
+		}
+
+		// MiniMax reasonableness rating
+		const minimaxApiKey = process.env.MINIMAX;
+		const minimaxGroupId = process.env.MINIMAX_GROUP;
+		if (minimaxApiKey && minimaxGroupId) {
+			const response = await callMiniMaxAPI(
+				reasonPrompt,
+				minimaxApiKey,
+				minimaxGroupId,
+			);
+			reasonScoreMini = extractScore(response);
+		}
+
+		const reasonableness: ReasonablenessResult[] = [
+			{ model: "kimi", score: reasonScoreKimi },
+			{ model: "minimax", score: reasonScoreMini },
+		];
+
+		// 4. Calculate uniqueness and reasonableness ratings
+		const validSimilarities = simResults
+			.map((result) => result.similarity)
+			.filter((score) => score !== null) as number[];
+
+		const validReasonableness = reasonableness
+			.map((result) => result.score)
+			.filter((score) => score !== null) as number[];
+
+		let uniquenessRating = 0;
+		let reasonablenessRating = 0;
+
+		if (validSimilarities.length > 0 && validReasonableness.length > 0) {
+			// Uniqueness is inverse of average similarity
+			uniquenessRating =
+				1 -
+				validSimilarities.reduce((a, b) => a + b, 0) / validSimilarities.length;
+			reasonablenessRating =
+				validReasonableness.reduce((a, b) => a + b, 0) /
+				validReasonableness.length;
+		}
+
+		// 5. Check if question meets quality thresholds
+		if (uniquenessRating > 0.3 && reasonablenessRating > 0.5) {
+			const questionId: Id<"question"> = await ctx.runMutation(
+				internal.question.insertQuestion,
+				{
+					title: args.title,
+					body: args.body,
+					mainCategory: args.mainCategory,
+					subCategory: args.subCategory,
+					userId: userId,
+					uniquenessRating: uniquenessRating,
+					reasonablenessRating: reasonablenessRating,
+				},
+			);
+
+			// Award incentive points for creating a quality question
+			await ctx.runMutation(internal.incentive.increaseUserIncentive, {
+				userId: userId,
+				amount: 15,
+			});
+
+			return {
+				success: true,
+				message: "Question created successfully! Quality thresholds met.",
+				questionId: questionId,
+				uniquenessRating: uniquenessRating,
+				reasonablenessRating: reasonablenessRating,
+			};
+		}
+
+		return {
+			success: false,
+			message: `Question rejected. Uniqueness: ${uniquenessRating.toFixed(2)}, Reasonableness: ${reasonablenessRating.toFixed(2)}. Need uniqueness > 0.3 and reasonableness > 0.5.`,
+			questionId: undefined,
 			uniquenessRating: uniquenessRating,
 			reasonablenessRating: reasonablenessRating,
 		};
