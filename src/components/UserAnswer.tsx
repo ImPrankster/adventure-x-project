@@ -104,43 +104,37 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 			<h3 className="font-semibold font-serif text-lg">用户回答</h3>
 
 			<div className="space-y-4">
-				{answers.map(
-					(answer: {
-						_id: Id<"answer">;
-						_creationTime: number;
-						questionId: Id<"question">;
-						content: string;
-						userId: string;
-						uniquenessRating: number;
-						reasonablenessRating: number;
-					}) => (
-						<Card key={answer._id} className="border border-green-400">
-							<CardHeader>
-								<div className="flex items-center justify-between">
-									<CardTitle className="font-medium text-sm">
-										Answer by {answer.userId}
-									</CardTitle>
-									<div className="flex items-center gap-2">
-										<span className="text-muted-foreground text-xs">
-											{new Date(answer._creationTime).toLocaleDateString()}
-										</span>
+				{answers.map((answer) => (
+					<Card key={answer._id} className="border border-green-400">
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<CardTitle className="font-medium text-sm">
+									Answer by {answer.userId}
+								</CardTitle>
+								<div className="flex items-center gap-2">
+									<span className="text-muted-foreground text-xs">
+										{new Date(answer._creationTime).toLocaleDateString()}
+									</span>
+									{answer.uniquenessRating && (
 										<span className="rounded bg-secondary px-2 py-1 text-xs">
 											Uniqueness: {answer.uniquenessRating}
 										</span>
+									)}
+									{answer.reasonablenessRating && (
 										<span className="rounded bg-secondary px-2 py-1 text-xs">
 											Reasonableness: {answer.reasonablenessRating}
 										</span>
-									</div>
+									)}
 								</div>
-							</CardHeader>
-							<CardContent>
-								<p className="font-serif text-sm leading-relaxed">
-									{answer.content}
-								</p>
-							</CardContent>
-						</Card>
-					),
-				)}
+							</div>
+						</CardHeader>
+						<CardContent>
+							<p className="font-serif text-sm leading-relaxed">
+								{answer.content}
+							</p>
+						</CardContent>
+					</Card>
+				))}
 			</div>
 		</div>
 	);
