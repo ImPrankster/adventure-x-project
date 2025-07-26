@@ -48,9 +48,6 @@ export default function AnswerInput({
 }: AnswerInputProps) {
 	const { user } = useUser();
 	const createUserAnswer = useAction(api.scoring.createAnswerWithRatings);
-	const hasAnswered = useQuery(api.answer.hasUserAnswered, {
-		questionId: questionId,
-	});
 
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [showScores, setShowScores] = useState(false);
@@ -131,40 +128,38 @@ export default function AnswerInput({
 
 	return (
 		<div className={className}>
-			{!hasAnswered && (
-				<Form {...form}>
-					<form
-						onSubmit={form.handleSubmit(onSubmit)}
-						className="flex min-h-[260px] flex-col gap-2"
+			<Form {...form}>
+				<form
+					onSubmit={form.handleSubmit(onSubmit)}
+					className="flex min-h-[260px] flex-col gap-2"
+				>
+					<FormField
+						control={form.control}
+						name="answer"
+						render={({ field }) => (
+							<FormItem className="flex flex-1 flex-col gap-2">
+								<FormLabel className="font-serif">你的回答</FormLabel>
+								<FormControl className="flex-1">
+									<Textarea
+										placeholder={placeholder}
+										{...field}
+										className="h-full w-full flex-1 resize-none rounded-lg px-6 py-4 font-serif"
+										disabled={isSubmitting}
+									/>
+								</FormControl>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+					<Button
+						type="submit"
+						className="self-end"
+						disabled={isSubmitting || !user}
 					>
-						<FormField
-							control={form.control}
-							name="answer"
-							render={({ field }) => (
-								<FormItem className="flex flex-1 flex-col gap-2">
-									<FormLabel className="font-serif">你的回答</FormLabel>
-									<FormControl className="flex-1">
-										<Textarea
-											placeholder={placeholder}
-											{...field}
-											className="h-full w-full flex-1 resize-none rounded-lg px-6 py-4 font-serif"
-											disabled={isSubmitting}
-										/>
-									</FormControl>
-									<FormMessage />
-								</FormItem>
-							)}
-						/>
-						<Button
-							type="submit"
-							className="self-end"
-							disabled={isSubmitting || !user}
-						>
-							{isSubmitting ? "发送中..." : "发送"}
-						</Button>
-					</form>
-				</Form>
-			)}
+						{isSubmitting ? "发送中..." : "发送"}
+					</Button>
+				</form>
+			</Form>
 
 			<Dialog open={showScores} onOpenChange={setShowScores}>
 				<DialogContent
