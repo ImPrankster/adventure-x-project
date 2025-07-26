@@ -1,5 +1,4 @@
 import { SignIn } from "@clerk/nextjs";
-import Image from "next/image";
 import { BackgroundBeams } from "~/components/ui/background-beam";
 import { Separator } from "~/components/ui/separator";
 
