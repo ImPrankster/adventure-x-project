@@ -9,7 +9,17 @@ import {
 	CarouselPrevious,
 	type CarouselApi,
 } from "~/components/ui/carousel";
-import { Film, BookOpen, MapPin } from "lucide-react";
+import {
+	Film,
+	BookOpen,
+	MapPin,
+	Globe,
+	Utensils,
+	Briefcase,
+	Brain,
+	BrainCog,
+	Gamepad,
+} from "lucide-react";
 import { cn } from "~/lib/utils";
 import { useQuery } from "convex/react";
 import { api as convexApi } from "@convex/_generated/api";
@@ -17,25 +27,62 @@ import { Badge } from "~/components/ui/badge";
 import Noise from "~/components/Noise";
 import Link from "next/link";
 import QuestionInput from "~/components/QuestionInput";
+import { Button } from "~/components/ui/button";
 
 const categoryConfig = [
 	{
-		title: "Travel",
+		title: "旅行",
 		background: "bg-green-300",
 		icon: MapPin,
 		categoryName: "Travel",
 	},
 	{
-		title: "Film",
+		title: "电影",
 		background: "bg-purple-300",
 		icon: Film,
-		categoryName: "Film",
+		categoryName: "Movie & TV",
 	},
 	{
-		title: "Book",
+		title: "书籍",
 		background: "bg-blue-300",
 		icon: BookOpen,
 		categoryName: "Book",
+	},
+	{
+		title: "互联网",
+		background: "bg-red-300",
+		icon: Globe,
+		categoryName: "Internet",
+	},
+	{
+		title: "美食",
+		background: "bg-yellow-300",
+		icon: Utensils,
+		categoryName: "Food",
+	},
+	{
+		title: "游戏",
+		background: "bg-orange-300",
+		icon: Gamepad,
+		categoryName: "Game",
+	},
+	{
+		title: "工作",
+		background: "bg-pink-300",
+		icon: Briefcase,
+		categoryName: "Work",
+	},
+	{
+		title: "哲学",
+		background: "bg-gray-300",
+		icon: BrainCog,
+		categoryName: "Philosophy",
+	},
+	{
+		title: "头脑风暴",
+		background: "bg-gray-300",
+		icon: Brain,
+		categoryName: "Brainstorm",
 	},
 ] as const;
 
@@ -43,25 +90,13 @@ export default function QuestionCarousel() {
 	const [api, setApi] = useState<CarouselApi>();
 	const [current, setCurrent] = useState(0);
 
-	// Fetch questions for each category
-	const filmQuestions = useQuery(
-		convexApi.question.getQuestionsByCategoryName,
-		{
-			categoryName: "Film",
-		},
-	);
-	const bookQuestions = useQuery(
-		convexApi.question.getQuestionsByCategoryName,
-		{
-			categoryName: "Book",
-		},
-	);
-	const travelQuestions = useQuery(
-		convexApi.question.getQuestionsByCategoryName,
-		{
-			categoryName: "Travel",
-		},
-	);
+	// Fetch questions for all categories dynamically
+	const categoryQueries = categoryConfig.map((category) => ({
+		...category,
+		questions: useQuery(convexApi.question.getQuestionsByCategoryName, {
+			categoryName: category.categoryName,
+		}),
+	}));
 
 	useEffect(() => {
 		if (!api) {
@@ -75,22 +110,20 @@ export default function QuestionCarousel() {
 		});
 	}, [api]);
 
-	// Helper function to get questions for current category
-	const getQuestionsForCategory = (categoryName: string) => {
-		switch (categoryName) {
-			case "Film":
-				return filmQuestions || [];
-			case "Book":
-				return bookQuestions || [];
-			case "Travel":
-				return travelQuestions || [];
-			default:
-				return [];
+	// Function to scroll to specific slide
+	const scrollToSlide = (index: number) => {
+		if (api) {
+			api.scrollTo(index);
 		}
 	};
 
+	// Check if all queries are loaded
+	const allQueriesLoaded = categoryQueries.every(
+		(query) => query.questions !== undefined,
+	);
+
 	// Loading state
-	if (!filmQuestions || !bookQuestions || !travelQuestions) {
+	if (!allQueriesLoaded) {
 		return (
 			<main className="flex min-h-screen items-center justify-center">
 				<div className="text-center">
@@ -110,16 +143,44 @@ export default function QuestionCarousel() {
 		>
 			<Noise className="bg-background opacity-70" />
 			<div className="container mx-auto px-4 py-8">
+				{/* Navigation Buttons */}
+				<div className="my-2 mb-4 flex justify-center gap-2">
+					{categoryQueries.map((category, index) => {
+						const IconComponent = category.icon;
+						const isActive = current === index + 1;
+
+						return (
+							<Button
+								variant="outline"
+								size="sm"
+								key={category.title}
+								onClick={() => scrollToSlide(index)}
+								className={cn(
+									"flex cursor-pointer items-center gap-2 rounded-full transition-all duration-200",
+									"border backdrop-blur-sm",
+									isActive
+										? "border-foreground/20 bg-background/80 shadow-lg"
+										: "border-transparent bg-background/40 hover:border-foreground/10 hover:bg-background/60",
+								)}
+							>
+								<IconComponent className="h-4 w-4" />
+								<span className="hidden sm:inline">{category.title}</span>
+								{category.questions?.length || 0}
+							</Button>
+						);
+					})}
+				</div>
+
 				<Carousel setApi={setApi} className="mx-auto w-full max-w-6xl">
 					<CarouselContent>
-						{categoryConfig.map((category, index) => {
+						{categoryQueries.map((category) => {
 							const IconComponent = category.icon;
-							const questions = getQuestionsForCategory(category.categoryName);
+							const questions = category.questions || [];
 
 							return (
 								<CarouselItem key={category.title}>
-									<div className="mb-6 text-center">
-										<div className="mb-4 flex items-center justify-center gap-3 font-serif">
+									<div className="mb-2 text-center">
+										<div className="mb-2 flex items-center justify-center gap-3 font-serif">
 											<IconComponent className="h-8 w-8" />
 											<h2 className="font-bold text-3xl">{category.title}</h2>
 										</div>
