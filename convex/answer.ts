@@ -9,11 +9,10 @@ import { internal } from "./_generated/api";
 export const getUserAnswersByQuestion = query({
 	args: {
 		questionId: v.id("question"),
-		paginationOpts: paginationOptsValidator,
 	},
 	returns: v.object({
 		isUnlocked: v.boolean(),
-		page: v.array(
+		answers: v.array(
 			v.object({
 				_id: v.id("answer"),
 				_creationTime: v.number(),
@@ -24,8 +23,6 @@ export const getUserAnswersByQuestion = query({
 				reasonablenessRating: v.number(),
 			}),
 		),
-		isDone: v.boolean(),
-		continueCursor: v.union(v.string(), v.null()),
 	}),
 	handler: async (ctx, args) => {
 		// Get the authenticated user
@@ -51,17 +48,15 @@ export const getUserAnswersByQuestion = query({
 		const isUnlocked = !!unlockRecord;
 
 		// Query answers for the specific question with pagination
-		const result = await ctx.db
+		const answers = await ctx.db
 			.query("answer")
 			.withIndex("by_question", (q) => q.eq("questionId", args.questionId))
-			.order("desc") // Most recent answers first
-			.paginate(args.paginationOpts);
+			.order("desc")
+			.collect();
 
 		return {
 			isUnlocked,
-			page: result.page,
-			isDone: result.isDone,
-			continueCursor: result.continueCursor,
+			answers,
 		};
 	},
 });
@@ -147,6 +142,33 @@ export const getAnswerById = query({
 			uniquenessRating: answer.uniquenessRating,
 			reasonablenessRating: answer.reasonablenessRating,
 		};
+	},
+});
+
+/**
+ * Check if the current user has already answered a specific question
+ */
+export const hasUserAnswered = query({
+	args: {
+		questionId: v.id("question"),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		// Get the authenticated user
+		const user = await ctx.auth.getUserIdentity();
+		if (!user) {
+			return false; // If not authenticated, they haven't answered
+		}
+		const userId = user.subject;
+
+		// Check if the user has already answered this question
+		const existingAnswer = await ctx.db
+			.query("answer")
+			.withIndex("by_question", (q) => q.eq("questionId", args.questionId))
+			.filter((q) => q.eq(q.field("userId"), userId))
+			.first();
+
+		return !!existingAnswer;
 	},
 });
 

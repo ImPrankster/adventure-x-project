@@ -1,12 +1,14 @@
 "use client";
 
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { Lock } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { Lock, Unlock } from "lucide-react";
+
+import { toast } from "sonner";
 
 interface UserAnswerProps {
 	questionId: Id<"question">;
@@ -15,8 +17,9 @@ interface UserAnswerProps {
 export default function UserAnswer({ questionId }: UserAnswerProps) {
 	const result = useQuery(api.answer.getUserAnswersByQuestion, {
 		questionId,
-		paginationOpts: { numItems: 5, cursor: null },
 	});
+	const userIncentive = useQuery(api.incentive.getUserIncentive);
+	const unlockQuestion = useMutation(api.question.unlockQuestionWithIncentive);
 
 	if (result === undefined) {
 		return (
@@ -27,22 +30,58 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 		);
 	}
 
-	const { isUnlocked, page: answers } = result;
+	const { isUnlocked, answers } = result;
 
 	if (!isUnlocked) {
+		const currentBalance = userIncentive?.amount || 0;
+		const requiredPoints = 5;
+
+		const handleUnlock = async () => {
+			try {
+				const result = await unlockQuestion({ questionId });
+				if (result.success) {
+					toast.success(result.message);
+				} else {
+					toast.error(result.message);
+				}
+			} catch (error) {
+				toast.error("Failed to unlock question");
+			}
+		};
+
 		return (
 			<div className="mt-4 space-y-4">
 				<h3 className="font-semibold font-serif text-lg">用户回答</h3>
 				<div className="flex items-center gap-2 rounded-lg border border-muted-foreground border-dashed p-4">
 					<Lock className="h-5 w-5 text-muted-foreground" />
-					<div className="text-muted-foreground">
-						<Badge variant="secondary" className="mb-2">
+					<div className="flex-1 text-muted-foreground">
+						<Badge variant="secondary" className="mb-2 font-serif">
 							Question Locked
 						</Badge>
-						<p>
+						<p className="mb-3">
 							You need to answer this question first to see other users'
-							answers.
+							answers, or unlock it with incentive points.
 						</p>
+						<div className="flex items-center gap-4">
+							<div className="text-sm">
+								<span className="font-medium">当前有</span> {currentBalance}{" "}
+								思绪
+							</div>
+							<div className="text-sm">
+								<span className="font-medium">解锁需要</span> {requiredPoints}{" "}
+								思绪
+							</div>
+							<Button
+								onClick={handleUnlock}
+								disabled={currentBalance < requiredPoints}
+								variant="outline"
+								size="sm"
+								className="ml-auto flex items-center gap-2"
+							>
+								<Unlock className="h-4 w-4" />
+								Unlock Answers
+							</Button>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -103,21 +142,6 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 					),
 				)}
 			</div>
-
-			{!result.isDone && (
-				<div className="flex justify-center pt-4">
-					<Button
-						onClick={() => {
-							// For now, we'll just show a message since we're not implementing pagination
-							alert("Load more functionality not implemented yet");
-						}}
-						variant="outline"
-						className="w-full max-w-xs"
-					>
-						Load More Answers
-					</Button>
-				</div>
-			)}
 		</div>
 	);
 }

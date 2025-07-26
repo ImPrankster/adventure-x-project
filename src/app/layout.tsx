@@ -3,6 +3,7 @@ import "~/styles/globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "~/components/ConvexProvider";
 import { cn } from "~/lib/utils";
+import { Toaster } from "~/components/ui/sonner";
 
 export const metadata: Metadata = {
 	title: "Clerk Next.js Quickstart",
@@ -18,7 +19,10 @@ export default function RootLayout({
 		<html lang="en">
 			<body className={cn("antialiased")}>
 				<ClerkProvider>
-					<ConvexClientProvider>{children}</ConvexClientProvider>
+					<ConvexClientProvider>
+						{children}
+						<Toaster />
+					</ConvexClientProvider>
 				</ClerkProvider>
 			</body>
 		</html>

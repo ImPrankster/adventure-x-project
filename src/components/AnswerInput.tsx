@@ -18,6 +18,7 @@ import {
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
+import { toast } from "sonner";
 
 interface AnswerInputProps {
 	questionId: Id<"question">;
@@ -61,6 +62,14 @@ export default function AnswerInput({
 			});
 
 			form.reset({ answer: "" });
+			toast.success(
+				<div>
+					<p className="font-serif">回答已提交</p>
+					<p className="font-serif text-lg">
+						<span className="font-bold">+10</span> 思绪
+					</p>
+				</div>,
+			);
 		} catch (error) {
 			console.error("Failed to submit answer:", error);
 		} finally {
@@ -99,7 +108,7 @@ export default function AnswerInput({
 						className="self-end"
 						disabled={isSubmitting || !user}
 					>
-						{isSubmitting ? "Sending..." : "Send"}
+						{isSubmitting ? "发送中..." : "发送"}
 					</Button>
 				</form>
 			</Form>
