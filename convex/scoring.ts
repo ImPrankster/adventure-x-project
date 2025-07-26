@@ -26,7 +26,8 @@ function extractScore(text: string | null): number | null {
 	}
 	const match = text.match(/([01](?:\.\d+)?|0?\.\d+)/);
 	if (match) {
-		const score = Number.parseFloat(match[1]);
+		const matchedString = match[1] ?? "";
+		const score = Number.parseFloat(matchedString);
 		if (score >= 0 && score <= 1) {
 			return score;
 		}
