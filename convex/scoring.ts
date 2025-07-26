@@ -1,8 +1,6 @@
-// @ts-nocheck
-
 "use node";
 
-import { internalAction } from "./_generated/server";
+import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import OpenAI from "openai";
@@ -15,11 +13,6 @@ interface SimilarityResult {
 interface ReasonablenessResult {
 	model: string;
 	score: number | null;
-}
-
-interface MultiSimResponse {
-	similarities: SimilarityResult[];
-	reasonableness: ReasonablenessResult[];
 }
 
 function extractScore(text: string | null): number | null {
@@ -56,7 +49,7 @@ async function callKimiAPI(
 			temperature: 0.3,
 		});
 
-		return completion.choices[0].message.content;
+		return completion.choices?.[0]?.message?.content ?? null;
 	} catch (error) {
 		console.error("Kimi API error:", error);
 		return null;
@@ -110,39 +103,26 @@ async function callMiniMaxAPI(
 	}
 }
 
-export const multiSimilarityReasonableness = internalAction({
+export const createAnswerWithRatings = action({
 	args: {
-		answer_id: v.id("answer"),
-		sim_model: v.union(v.literal("kimi"), v.literal("minimax")),
-		reason_model: v.union(v.literal("kimi"), v.literal("minimax")),
-		score_type: v.union(v.literal("float"), v.literal("int")),
+		answerContent: v.string(),
+		questionId: v.id("question"),
 	},
 	returns: v.object({
-		similarities: v.array(
-			v.object({
-				ai_name: v.string(),
-				similarity: v.union(v.number(), v.null()),
-			}),
-		),
-		reasonableness: v.array(
-			v.object({
-				model: v.string(),
-				score: v.union(v.number(), v.null()),
-			}),
-		),
+		uniquenessRating: v.number(),
+		reasonablenessRating: v.number(),
 	}),
-	handler: async (ctx, args): Promise<MultiSimResponse> => {
-		// 1. 获取答案内容和问题ID
-		const answer = await ctx.runQuery(api.answer.getAnswerById, {
-			id: args.answer_id,
-		});
-
-		if (!answer) {
-			throw new Error("未找到答案");
+	handler: async (ctx, args) => {
+		const questionId = args.questionId;
+		const userText = args.answerContent;
+		const sim_model = "kimi";
+		const reason_model = "kimi";
+		const score_type = "float";
+		const user = await ctx.auth.getUserIdentity();
+		if (!user) {
+			throw new Error("User not authenticated");
 		}
-
-		const questionId = answer.questionId;
-		const userText = answer.content;
+		const userId = user.subject;
 
 		// 2. 获取所有AI答案
 		const aiAnsList = await ctx.runQuery(api.question.getAIAnswer, {
@@ -173,7 +153,7 @@ export const multiSimilarityReasonableness = internalAction({
 
 			let score: number | null = null;
 
-			if (args.sim_model === "kimi") {
+			if (sim_model === "kimi") {
 				const kimiApiKey = process.env.KIMI;
 				if (!kimiApiKey) {
 					throw new Error("KIMI API key not found");
@@ -181,24 +161,6 @@ export const multiSimilarityReasonableness = internalAction({
 				const response = await callKimiAPI(prompt, kimiApiKey);
 				score = extractScore(response);
 			}
-			if (args.sim_model === "minimax") {
-				const minimaxApiKey = process.env.MINIMAX;
-				const minimaxGroupId = process.env.MINIMAX_GROUP;
-				if (!minimaxApiKey || !minimaxGroupId) {
-					throw new Error("MiniMax API key or group ID not found");
-				}
-				const response = await callMiniMaxAPI(
-					prompt,
-					minimaxApiKey,
-					minimaxGroupId,
-				);
-				score = extractScore(response);
-			}
-
-			if (args.score_type === "int" && score !== null) {
-				score = Math.round(score * 100);
-			}
-
 			simResults.push({
 				ai_name: aiAns.aiName || "unknown",
 				similarity: score,
@@ -216,9 +178,6 @@ export const multiSimilarityReasonableness = internalAction({
 		if (kimiApiKey) {
 			const response = await callKimiAPI(reasonPrompt, kimiApiKey);
 			reasonScoreKimi = extractScore(response);
-			if (args.score_type === "int" && reasonScoreKimi !== null) {
-				reasonScoreKimi = Math.round(reasonScoreKimi * 100);
-			}
 		}
 
 		// MiniMax 合理性评分
@@ -231,9 +190,6 @@ export const multiSimilarityReasonableness = internalAction({
 				minimaxGroupId,
 			);
 			reasonScoreMini = extractScore(response);
-			if (args.score_type === "int" && reasonScoreMini !== null) {
-				reasonScoreMini = Math.round(reasonScoreMini * 100);
-			}
 		}
 
 		const reasonableness: ReasonablenessResult[] = [
@@ -250,24 +206,39 @@ export const multiSimilarityReasonableness = internalAction({
 			.map((result) => result.score)
 			.filter((score) => score !== null) as number[];
 
+		let uniquenessRating = 0;
+		let reasonablenessRating = 0;
+
 		if (validSimilarities.length > 0 && validReasonableness.length > 0) {
-			const avgSimilarity =
+			uniquenessRating =
+				1 -
 				validSimilarities.reduce((a, b) => a + b, 0) / validSimilarities.length;
-			const avgReasonableness =
+			reasonablenessRating =
 				validReasonableness.reduce((a, b) => a + b, 0) /
 				validReasonableness.length;
+		}
 
-			// 更新答案的评分
-			await ctx.runMutation(internal.answer.updateAnswerRatings, {
-				answerId: args.answer_id,
-				uniquenessRating: avgSimilarity,
-				reasonablenessRating: avgReasonableness,
+		if (uniquenessRating < 0.5 && reasonablenessRating < 0.5) {
+			await ctx.runMutation(internal.answer.insertAnswer, {
+				questionId: questionId,
+				content: userText,
+				userId: userId,
+				uniquenessRating: uniquenessRating,
+				reasonablenessRating: reasonablenessRating,
+			});
+			await ctx.runMutation(internal.question.unlockQuestion, {
+				questionId: questionId,
+				userId: userId,
+			});
+			await ctx.runMutation(internal.incentive.increaseUserIncentive, {
+				userId: userId,
+				amount: 10,
 			});
 		}
 
 		return {
-			similarities: simResults,
-			reasonableness: reasonableness,
+			uniquenessRating: uniquenessRating,
+			reasonablenessRating: reasonablenessRating,
 		};
 	},
 });

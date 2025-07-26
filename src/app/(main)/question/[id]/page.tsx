@@ -32,15 +32,7 @@ export default function QuestionDetailPage() {
 		questionId: questionId,
 	});
 
-	const hasAnswered = useQuery(convexApi.answer.hasUserAnswered, {
-		questionId: questionId,
-	});
-
-	if (
-		question === undefined ||
-		aiAnswer === undefined ||
-		hasAnswered === undefined
-	) {
+	if (question === undefined || aiAnswer === undefined) {
 		return (
 			<main className="flex min-h-screen items-center justify-center">
 				<div className="text-center">
@@ -175,12 +167,7 @@ export default function QuestionDetailPage() {
 					</div>
 				</CardContent>
 			</Card>
-			{!hasAnswered && (
-				<AnswerInput
-					questionId={questionId}
-					className="flex min-h-[260px] flex-col gap-2"
-				/>
-			)}
+			<AnswerInput questionId={questionId} />
 			<UserAnswer questionId={questionId} />
 		</main>
 	);

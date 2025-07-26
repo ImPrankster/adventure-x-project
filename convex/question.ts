@@ -119,7 +119,7 @@ export const getAIAnswer = query({
 		const aiAnswer = await ctx.db
 			.query("aiAnswer")
 			.filter((q) => q.eq(q.field("questionId"), args.questionId))
-			.collect();
+			.take(3);
 
 		if (!aiAnswer) return [];
 

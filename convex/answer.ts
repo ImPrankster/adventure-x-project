@@ -1,13 +1,5 @@
-import {
-	query,
-	mutation,
-	action,
-	internalAction,
-	internalMutation,
-} from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import { paginationOptsValidator } from "convex/server";
-import { internal, api } from "./_generated/api";
 
 /**
  * Get paginated user answers for a specific question
@@ -70,58 +62,23 @@ export const getUserAnswersByQuestion = query({
 	},
 });
 
-/**
- * Create a new user answer for a question
- */
-export const createUserAnswer = mutation({
+export const insertAnswer = internalMutation({
 	args: {
 		questionId: v.id("question"),
 		content: v.string(),
+		userId: v.string(),
+		uniquenessRating: v.number(),
+		reasonablenessRating: v.number(),
 	},
 	returns: v.id("answer"),
 	handler: async (ctx, args) => {
-		// Verify the question exists
-		const question = await ctx.db.get(args.questionId);
-		const user = await ctx.auth.getUserIdentity();
-		if (!user) {
-			throw new Error("User not authenticated");
-		}
-		const userId = user.subject;
-
-		if (!question) {
-			throw new Error("Question not found");
-		}
-
-		// Create the answer
 		const answerId = await ctx.db.insert("answer", {
 			questionId: args.questionId,
 			content: args.content,
-			userId: userId,
+			userId: args.userId,
+			uniquenessRating: args.uniquenessRating,
+			reasonablenessRating: args.reasonablenessRating,
 		});
-
-		// Increase user incentive for creating an answer
-		await ctx.runMutation(internal.incentive.increaseUserIncentive, {
-			userId: userId,
-			amount: 10, // Give 10 points for creating an answer
-		});
-
-		// Unlock the question for the user
-		await ctx.runMutation(internal.question.unlockQuestion, {
-			userId: userId,
-			questionId: args.questionId,
-		});
-
-		await ctx.scheduler.runAfter(
-			0,
-			internal.scoring.multiSimilarityReasonableness,
-			{
-				answer_id: answerId,
-				sim_model: "kimi",
-				reason_model: "kimi",
-				score_type: "int",
-			},
-		);
-
 		return answerId;
 	},
 });
@@ -199,56 +156,6 @@ export const deleteAnswer = mutation({
 		}
 
 		await ctx.db.delete(args.id);
-		return null;
-	},
-});
-
-/**
- * Fill similarity and reasonableness ratings for a specific answer
- */
-export const fillAnswerRatings = internalAction({
-	args: {
-		answerId: v.id("answer"),
-		similarityRating: v.number(),
-		reasonablenessRating: v.number(),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		// Verify the answer exists
-		const answer = await ctx.runQuery(api.answer.getAnswerById, {
-			id: args.answerId,
-		});
-
-		if (!answer) {
-			throw new Error("Answer not found");
-		}
-
-		// Update the answer with the provided ratings
-		await ctx.runMutation(internal.answer.updateAnswerRatings, {
-			answerId: args.answerId,
-			uniquenessRating: args.similarityRating,
-			reasonablenessRating: args.reasonablenessRating,
-		});
-
-		return null;
-	},
-});
-
-/**
- * Update answer ratings (internal mutation)
- */
-export const updateAnswerRatings = internalMutation({
-	args: {
-		answerId: v.id("answer"),
-		uniquenessRating: v.number(),
-		reasonablenessRating: v.number(),
-	},
-	returns: v.null(),
-	handler: async (ctx, args) => {
-		await ctx.db.patch(args.answerId, {
-			uniquenessRating: args.uniquenessRating,
-			reasonablenessRating: args.reasonablenessRating,
-		});
 		return null;
 	},
 });
