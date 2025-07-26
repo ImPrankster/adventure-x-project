@@ -12,7 +12,7 @@ https://idea-mesh.vercel.app (暂时只适配Web)
 #### **1. 项目概述**
 
 本项目是一个基于现代化技术栈构建、并部署在 **Vercel** 平台的全栈 Web 应用。前端采用 Next.js 框架，结合 shadcn/ui 和 Tailwind CSS 快速构建美观、响应式的用户界面。后端及数据库采用 Convex 平台，实现了实时数据同步和无服务器化。用户认证由 Clerk 提供全方位支持。此外，项目集成了 Kimi 和 Minimax 的 AI 能力，以提供智能化的功能，并且感谢MiniMax, Clacky提供的Vibe coding和agent支持，帮助我们完善后端和算法部分开发，另外感谢paraflow平台提供的UI设计支持。
-。
+
 
 #### **2. 技术栈详情**
 
