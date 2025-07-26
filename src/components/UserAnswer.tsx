@@ -115,12 +115,12 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 									<span className="text-muted-foreground text-xs">
 										{new Date(answer._creationTime).toLocaleDateString()}
 									</span>
-									{answer.uniquenessRating && (
+									{answer.uniquenessRating !== undefined && (
 										<span className="rounded bg-secondary px-2 py-1 text-xs">
 											Uniqueness: {answer.uniquenessRating}
 										</span>
 									)}
-									{answer.reasonablenessRating && (
+									{answer.reasonablenessRating !== undefined && (
 										<span className="rounded bg-secondary px-2 py-1 text-xs">
 											Reasonableness: {answer.reasonablenessRating}
 										</span>
