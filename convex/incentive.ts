@@ -43,7 +43,9 @@ export const getUserIncentive = query({
 	handler: async (ctx, args) => {
 		const user = await ctx.auth.getUserIdentity();
 		if (!user) {
-			throw new Error("User not authenticated");
+			return {
+				amount: 0,
+			};
 		}
 		const userId = user.subject;
 

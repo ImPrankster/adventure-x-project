@@ -34,7 +34,10 @@ export const getUserAnswersByQuestion = query({
 		// Get the authenticated user
 		const user = await ctx.auth.getUserIdentity();
 		if (!user) {
-			throw new Error("User not authenticated");
+			return {
+				isUnlocked: false,
+				answers: [],
+			};
 		}
 		const userId = user.subject;
 
