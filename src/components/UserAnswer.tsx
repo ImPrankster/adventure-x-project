@@ -116,13 +116,25 @@ export default function UserAnswer({ questionId }: UserAnswerProps) {
 										{new Date(answer._creationTime).toLocaleDateString()}
 									</span>
 									{answer.uniquenessRating !== undefined && (
-										<span className="rounded bg-secondary px-2 py-1 text-xs">
-											Uniqueness: {answer.uniquenessRating}
+										<span
+											className={`rounded px-2 py-1 text-xs ${
+												answer.uniquenessRating >= 0.7
+													? "bg-green-400 text-white"
+													: "bg-slate-400 text-white"
+											}`}
+										>
+											独特度: {answer.uniquenessRating.toFixed(2)}
 										</span>
 									)}
 									{answer.reasonablenessRating !== undefined && (
-										<span className="rounded bg-secondary px-2 py-1 text-xs">
-											Reasonableness: {answer.reasonablenessRating}
+										<span
+											className={`rounded px-2 py-1 text-xs ${
+												answer.reasonablenessRating >= 0.7
+													? "bg-green-400 text-white"
+													: "bg-slate-400 text-white"
+											}`}
+										>
+											合理度: {answer.reasonablenessRating.toFixed(2)}
 										</span>
 									)}
 								</div>

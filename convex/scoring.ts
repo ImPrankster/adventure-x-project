@@ -218,7 +218,7 @@ export const createAnswerWithRatings = action({
 				validReasonableness.length;
 		}
 
-		if (uniquenessRating < 0.5 && reasonablenessRating < 0.5) {
+		if (uniquenessRating > 0.5 && reasonablenessRating > 0.3) {
 			await ctx.runMutation(internal.answer.insertAnswer, {
 				questionId: questionId,
 				content: userText,
