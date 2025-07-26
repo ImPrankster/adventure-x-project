@@ -1,0 +1,270 @@
+"use node";
+
+import { internalAction } from "./_generated/server";
+import { v } from "convex/values";
+import { api, internal } from "./_generated/api";
+import OpenAI from "openai";
+
+interface SimilarityResult {
+	ai_name: string;
+	similarity: number | null;
+}
+
+interface ReasonablenessResult {
+	model: string;
+	score: number | null;
+}
+
+interface MultiSimResponse {
+	similarities: SimilarityResult[];
+	reasonableness: ReasonablenessResult[];
+}
+
+function extractScore(text: string | null): number | null {
+	if (!text) {
+		return null;
+	}
+	const match = text.match(/([01](?:\.\d+)?|0?\.\d+)/);
+	if (match) {
+		const score = Number.parseFloat(match[1]);
+		if (score >= 0 && score <= 1) {
+			return score;
+		}
+	}
+	return null;
+}
+
+async function callKimiAPI(
+	prompt: string,
+	apiKey: string,
+): Promise<string | null> {
+	try {
+		const client = new OpenAI({
+			apiKey: apiKey,
+			baseURL: "https://api.moonshot.cn/v1",
+		});
+
+		const completion = await client.chat.completions.create({
+			model: "kimi-k2-0711-preview",
+			messages: [
+				{ role: "system", content: "你是一个严格的相似度判分助手。" },
+				{ role: "user", content: prompt },
+			],
+			temperature: 0.3,
+		});
+
+		return completion.choices[0].message.content;
+	} catch (error) {
+		console.error("Kimi API error:", error);
+		return null;
+	}
+}
+
+async function callMiniMaxAPI(
+	prompt: string,
+	apiKey: string,
+	groupId: string,
+): Promise<string | null> {
+	try {
+		const url = `https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId=${groupId}`;
+		const headers = {
+			Authorization: `Bearer ${apiKey}`,
+			"Content-Type": "application/json",
+		};
+
+		const requestBody = {
+			model: "abab6-chat",
+			tokens_to_generate: 1024,
+			reply_constraints: {
+				sender_type: "BOT",
+				sender_name: "MM智能助理",
+			},
+			messages: [{ sender_type: "USER", sender_name: "小明", text: prompt }],
+			bot_setting: [
+				{
+					bot_name: "MM智能助理",
+					content:
+						"MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。",
+				},
+			],
+		};
+
+		const response = await fetch(url, {
+			method: "POST",
+			headers: headers,
+			body: JSON.stringify(requestBody),
+		});
+
+		if (response.ok) {
+			const data = await response.json();
+			return data.reply;
+		}
+		console.error("MiniMax API error:", response.status, response.statusText);
+		return null;
+	} catch (error) {
+		console.error("MiniMax API error:", error);
+		return null;
+	}
+}
+
+export const multiSimilarityReasonableness = internalAction({
+	args: {
+		answer_id: v.id("answer"),
+		sim_model: v.union(v.literal("kimi"), v.literal("minimax")),
+		reason_model: v.union(v.literal("kimi"), v.literal("minimax")),
+		score_type: v.union(v.literal("float"), v.literal("int")),
+	},
+	returns: v.object({
+		similarities: v.array(
+			v.object({
+				ai_name: v.string(),
+				similarity: v.union(v.number(), v.null()),
+			}),
+		),
+		reasonableness: v.array(
+			v.object({
+				model: v.string(),
+				score: v.union(v.number(), v.null()),
+			}),
+		),
+	}),
+	handler: async (ctx, args): Promise<MultiSimResponse> => {
+		// 1. 获取答案内容和问题ID
+		const answer = await ctx.runQuery(api.answer.getAnswerById, {
+			id: args.answer_id,
+		});
+
+		if (!answer) {
+			throw new Error("未找到答案");
+		}
+
+		const questionId = answer.questionId;
+		const userText = answer.content;
+
+		// 2. 获取所有AI答案
+		const aiAnsList = await ctx.runQuery(api.question.getAIAnswer, {
+			questionId: questionId,
+		});
+
+		if (!aiAnsList || aiAnsList.length === 0) {
+			throw new Error("未找到AI答案");
+		}
+
+		// 3. 获取问题内容
+		const question = await ctx.runQuery(api.question.getQuestionById, {
+			id: questionId,
+		});
+
+		if (!question) {
+			throw new Error("未找到问题");
+		}
+
+		const questionText = question.body;
+
+		// 4. 计算每个AI答案与用户回答的相似度
+		const simResults: SimilarityResult[] = [];
+
+		for (const aiAns of aiAnsList) {
+			const aiText = aiAns.content;
+			const prompt = `AI的标准答案：${aiText}\n用户的回答：${userText}\n请你用0到1的分数严格判定两者内容的相似度，1为完全相同，0为完全不同，只返回分数，不要解释。`;
+
+			let score: number | null = null;
+
+			if (args.sim_model === "kimi") {
+				const kimiApiKey = process.env.KIMI;
+				if (!kimiApiKey) {
+					throw new Error("KIMI API key not found");
+				}
+				const response = await callKimiAPI(prompt, kimiApiKey);
+				score = extractScore(response);
+			}
+			if (args.sim_model === "minimax") {
+				const minimaxApiKey = process.env.MINIMAX;
+				const minimaxGroupId = process.env.MINIMAX_GROUP;
+				if (!minimaxApiKey || !minimaxGroupId) {
+					throw new Error("MiniMax API key or group ID not found");
+				}
+				const response = await callMiniMaxAPI(
+					prompt,
+					minimaxApiKey,
+					minimaxGroupId,
+				);
+				score = extractScore(response);
+			}
+
+			if (args.score_type === "int" && score !== null) {
+				score = Math.round(score * 100);
+			}
+
+			simResults.push({
+				ai_name: aiAns.aiName || "unknown",
+				similarity: score,
+			});
+		}
+
+		// 5. 判定合理性
+		const reasonPrompt = `问题：${questionText}\n用户的回答：${userText}\n请你用0到1的分数严格判定用户回答的合理性，1为完全合理，0为完全不合理，只返回分数，不要解释。`;
+
+		let reasonScoreKimi: number | null = null;
+		let reasonScoreMini: number | null = null;
+
+		// Kimi 合理性评分
+		const kimiApiKey = process.env.KIMI;
+		if (kimiApiKey) {
+			const response = await callKimiAPI(reasonPrompt, kimiApiKey);
+			reasonScoreKimi = extractScore(response);
+			if (args.score_type === "int" && reasonScoreKimi !== null) {
+				reasonScoreKimi = Math.round(reasonScoreKimi * 100);
+			}
+		}
+
+		// MiniMax 合理性评分
+		const minimaxApiKey = process.env.MINIMAX;
+		const minimaxGroupId = process.env.MINIMAX_GROUP;
+		if (minimaxApiKey && minimaxGroupId) {
+			const response = await callMiniMaxAPI(
+				reasonPrompt,
+				minimaxApiKey,
+				minimaxGroupId,
+			);
+			reasonScoreMini = extractScore(response);
+			if (args.score_type === "int" && reasonScoreMini !== null) {
+				reasonScoreMini = Math.round(reasonScoreMini * 100);
+			}
+		}
+
+		const reasonableness: ReasonablenessResult[] = [
+			{ model: "kimi", score: reasonScoreKimi },
+			{ model: "minimax", score: reasonScoreMini },
+		];
+
+		// 6. 计算平均相似度和合理性分数，并更新答案的评分
+		const validSimilarities = simResults
+			.map((result) => result.similarity)
+			.filter((score) => score !== null) as number[];
+
+		const validReasonableness = reasonableness
+			.map((result) => result.score)
+			.filter((score) => score !== null) as number[];
+
+		if (validSimilarities.length > 0 && validReasonableness.length > 0) {
+			const avgSimilarity =
+				validSimilarities.reduce((a, b) => a + b, 0) / validSimilarities.length;
+			const avgReasonableness =
+				validReasonableness.reduce((a, b) => a + b, 0) /
+				validReasonableness.length;
+
+			// 更新答案的评分
+			await ctx.runMutation(internal.answer.updateAnswerRatings, {
+				answerId: args.answer_id,
+				uniquenessRating: avgSimilarity,
+				reasonablenessRating: avgReasonableness,
+			});
+		}
+
+		return {
+			similarities: simResults,
+			reasonableness: reasonableness,
+		};
+	},
+});

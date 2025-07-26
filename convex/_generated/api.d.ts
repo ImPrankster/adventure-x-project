@@ -16,6 +16,7 @@ import type {
 import type * as answer from "../answer.js";
 import type * as incentive from "../incentive.js";
 import type * as question from "../question.js";
+import type * as scoring from "../scoring.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   answer: typeof answer;
   incentive: typeof incentive;
   question: typeof question;
+  scoring: typeof scoring;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

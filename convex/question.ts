@@ -272,3 +272,32 @@ export const unlockQuestionWithIncentive = mutation({
 		};
 	},
 });
+
+// 6. Retrieve all questions
+export const getAllQuestions = query({
+	args: {},
+	returns: v.array(
+		v.object({
+			_id: v.id("question"),
+			_creationTime: v.number(),
+			title: v.string(),
+			body: v.string(),
+			mainCategory: v.string(),
+			subCategory: v.string(),
+			userId: v.optional(v.string()),
+		}),
+	),
+	handler: async (ctx, args) => {
+		const allQuestions = await ctx.db.query("question").collect();
+
+		return allQuestions.map((question) => ({
+			_id: question._id,
+			_creationTime: question._creationTime,
+			title: question.title,
+			body: question.body,
+			mainCategory: question.mainCategory,
+			subCategory: question.subCategory,
+			userId: question.userId,
+		}));
+	},
+});

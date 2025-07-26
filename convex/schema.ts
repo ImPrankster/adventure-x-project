@@ -19,8 +19,8 @@ export default defineSchema({
 		questionId: v.id("question"),
 		content: v.string(),
 		userId: v.string(),
-		uniquenessRating: v.number(),
-		reasonablenessRating: v.number(),
+		uniquenessRating: v.optional(v.number()),
+		reasonablenessRating: v.optional(v.number()),
 	})
 		.searchIndex("by_content", {
 			searchField: "content",
