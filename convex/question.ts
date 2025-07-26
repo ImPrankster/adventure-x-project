@@ -58,6 +58,7 @@ export const getQuestionsByCategoryName = query({
 		const allQuestions = await ctx.db
 			.query("question")
 			.filter((q) => q.eq(q.field("mainCategory"), args.categoryName))
+			.order("desc")
 			.collect();
 
 		return allQuestions.map((question) => ({
@@ -319,8 +320,6 @@ export const insertQuestion = internalMutation({
 		mainCategory: v.string(),
 		subCategory: v.string(),
 		userId: v.string(),
-		uniquenessRating: v.number(),
-		reasonablenessRating: v.number(),
 	},
 	returns: v.id("question"),
 	handler: async (ctx, args) => {

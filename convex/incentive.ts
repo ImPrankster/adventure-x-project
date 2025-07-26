@@ -35,6 +35,40 @@ export const increaseUserIncentive = internalMutation({
 	},
 });
 
+/**
+ * Internal function to decrease user incentive by a specified amount.
+ * If no entry exists for the user, creates one with 0 amount.
+ */
+export const decreaseUserIncentive = internalMutation({
+	args: {
+		userId: v.string(),
+		amount: v.number(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		// Check if an entry already exists for this user
+		const existingIncentive = await ctx.db
+			.query("userIncentive")
+			.filter((q) => q.eq(q.field("userId"), args.userId))
+			.unique();
+
+		if (existingIncentive) {
+			// Update existing entry by decreasing the amount
+			await ctx.db.patch(existingIncentive._id, {
+				amount: Math.max(0, existingIncentive.amount - args.amount),
+			});
+		} else {
+			// Create new entry with 0 amount (since we're decreasing)
+			await ctx.db.insert("userIncentive", {
+				userId: args.userId,
+				amount: 0,
+			});
+		}
+
+		return null;
+	},
+});
+
 export const getUserIncentive = query({
 	args: {},
 	returns: v.object({

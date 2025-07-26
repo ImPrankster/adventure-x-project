@@ -15,7 +15,7 @@ import {
 	FormLabel,
 	FormMessage,
 } from "./ui/form";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
@@ -34,7 +34,6 @@ interface QuestionInputProps {
 }
 
 interface ScoreData {
-	uniquenessRating: number;
 	reasonablenessRating: number;
 }
 
@@ -69,6 +68,7 @@ export default function QuestionInput({
 }: QuestionInputProps) {
 	const { user } = useUser();
 	const createQuestion = useAction(api.scoring.createQuestionWithRatings);
+	const userIncentive = useQuery(api.incentive.getUserIncentive);
 
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [showScores, setShowScores] = useState(false);
@@ -106,7 +106,6 @@ export default function QuestionInput({
 
 			if (result.success) {
 				setScoreData({
-					uniquenessRating: result.uniquenessRating || 0,
 					reasonablenessRating: result.reasonablenessRating || 0,
 				});
 				setShowScores(true);
@@ -115,14 +114,13 @@ export default function QuestionInput({
 					<div>
 						<p className="font-serif">问题已创建</p>
 						<p className="font-serif text-lg">
-							<span className="font-bold">+15</span> 思绪
+							<span className="font-bold">-10</span> 思绪
 						</p>
 					</div>,
 				);
 			} else {
 				// Show rejection message with scores
 				setScoreData({
-					uniquenessRating: result.uniquenessRating || 0,
 					reasonablenessRating: result.reasonablenessRating || 0,
 				});
 				setShowScores(true);
@@ -138,19 +136,6 @@ export default function QuestionInput({
 
 	const formatScore = (score: number) => {
 		return `${(score * 100).toFixed(1)}%`;
-	};
-
-	const getUniquenessEvaluation = (score: number) => {
-		if (score >= 0.8) {
-			return "非常独特！你的问题很有创意，展现了与众不同的思考角度。";
-		}
-		if (score >= 0.5) {
-			return "比较独特，你的问题有一定的新颖性。";
-		}
-		if (score >= 0.3) {
-			return "独特性一般，可以尝试从不同角度提出问题。";
-		}
-		return "独特性较低，建议思考一些更有创意的问题。";
 	};
 
 	const getReasonablenessEvaluation = (score: number) => {
@@ -264,10 +249,17 @@ export default function QuestionInput({
 								/>
 							</div>
 
+							<span className="text-muted-foreground text-sm">
+								(需要10点思绪，当前思绪：{userIncentive?.amount})
+							</span>
 							<Button
 								type="submit"
 								className="self-end"
-								disabled={isSubmitting || !user}
+								disabled={
+									isSubmitting ||
+									!user ||
+									(userIncentive && userIncentive.amount < 10)
+								}
 							>
 								{isSubmitting ? "创建中..." : "创建问题"}
 							</Button>
@@ -286,22 +278,10 @@ export default function QuestionInput({
 								{scoreData && (
 									<>
 										<div className="flex items-center justify-between">
-											<span className="font-serif">独特性评分：</span>
-											<span className="font-medium font-serif">
-												{formatScore(scoreData.uniquenessRating)}
-											</span>
-										</div>
-										<div className="flex items-center justify-between">
 											<span className="font-serif">合理性评分：</span>
 											<span className="font-medium font-serif">
 												{formatScore(scoreData.reasonablenessRating)}
 											</span>
-										</div>
-										<div className="space-y-2">
-											<div className="font-medium font-serif">独特性评价：</div>
-											<div className="text-muted-foreground text-sm">
-												{getUniquenessEvaluation(scoreData.uniquenessRating)}
-											</div>
 										</div>
 										<div className="space-y-2">
 											<div className="font-medium font-serif">合理性评价：</div>
@@ -311,14 +291,13 @@ export default function QuestionInput({
 												)}
 											</div>
 										</div>
-										{scoreData.uniquenessRating <= 0.3 ||
-										scoreData.reasonablenessRating <= 0.5 ? (
+										{scoreData.reasonablenessRating <= 0.5 ? (
 											<div className="text-muted-foreground text-sm">
 												<p>💡 提示：</p>
 												<ul className="mt-1 list-inside list-disc space-y-1">
-													<li>尝试从不同角度思考问题</li>
 													<li>确保问题表述清晰准确</li>
-													<li>避免与现有问题过于相似</li>
+													<li>检查问题的逻辑性和合理性</li>
+													<li>确保问题有实际意义和价值</li>
 												</ul>
 											</div>
 										) : null}
