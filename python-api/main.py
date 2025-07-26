@@ -27,15 +27,6 @@ class GenAnsRequest(BaseModel):
     category_name: Optional[str] = None
     # 可扩展更多参数
 
-def get_text_by_id(question_id):
-    # 这里模拟获取 text，实际可查数据库或其他服务
-    # 假设有个 dict 或数据库
-    question_db = {
-        "q1": "What is AI?",
-        "q2": "Explain convex optimization.",
-    }
-    return question_db.get(question_id)
-
 
 def insert_ai_answer_to_convex(question_id, content, ai_name):
     """
@@ -125,29 +116,6 @@ def get_minimax_answer_by_id(question_id, question_db):
     else:
         print(f"[MiniMax ERROR] {response.status_code}: {response.text}")
 
-def get_or_create_question_id(client, title, body, mainCategory, subCategory, userId=None):
-    """
-    先查找是否有相同title和body的问题，有则返回其id，否则新建并返回id。
-    """
-    # 查询是否已存在
-    questions = client.query(
-        "question:searchQuestions",
-        dict(keyword=title)
-    )
-    for q in questions:
-        if q["title"] == title and q["body"] == body:
-            return q["_id"]
-    # 不存在则新建
-    args = dict(title=title, body=body, mainCategory=mainCategory, subCategory=subCategory)
-    if userId:
-        args["userId"] = userId
-    question_id = client.mutation("question:createQuestion", args)
-    return question_id
-
-# 用法示例：
-# question_id = get_or_create_question_id(client, "你的标题", "你的内容", "主分类", "子分类")
-# insert_ai_answer_to_convex(question_id, kimi_answer, "Kimi")
-
 
 @app.post("/gen_ai_answers")
 def gen_ai_answers(req: GenAnsRequest):
@@ -204,126 +172,6 @@ def extract_score(text):
             return score
     return None
 
-@app.post("/similarity")
-def calc_similarity(req: SimRequest):
-
-    ai_ans = client.query("question:getAIAnswer", dict(questionId=req.question_id))
-    
-    print(f"AI Answer: {ai_ans}")
-    if not ai_ans or not ai_ans[0]:
-        raise HTTPException(status_code=404, detail="未找到AI答案")
-    ai_text = ai_ans[0]["content"]
-    prompt = f"AI的答案：{ai_text}\n用户的回答：{req.user_text}\n请你用0到1的分数严格判定两者内容的相似度，1为完全相同，0为完全不同，只返回分数，不要解释。"
-    if req.model == "kimi":
-        client_kimi = OpenAI(
-            api_key = os.getenv("KIMI"),
-            base_url = "https://api.moonshot.cn/v1",
-        )
-        completion = client_kimi.chat.completions.create(
-            model = "kimi-k2-0711-preview",
-            messages = [
-                {"role": "system", "content": "你是一个严格的相似度判分助手。"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature = 0.3,
-        )
-        score = extract_score(completion.choices[0].message.content)
-    elif req.model == "minimax":
-        group_id = os.getenv("MINIMAX_GROUP")
-        api_key = os.getenv("MINIMAX")
-        url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-        headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
-        request_body = {
-            "model": "MiniMax-Text-01",
-            "tokens_to_generate": 256,
-            "reply_constraints": {
-                "sender_type": "BOT",
-                "sender_name": "评分助理"
-            },
-            "messages": [
-                {"sender_type": "USER", "sender_name": "任务调度器", "text": prompt}
-            ],
-            "bot_setting": [
-                {
-                    "bot_name": "评分助理",
-                    "content": "你是一个严格的相似度判分助手。"
-                }
-            ],
-        }
-        score = None
-        try:
-            response = requests.post(url, headers=headers, json=request_body)
-            if response.status_code == 200:
-                score = extract_score(response.json().get("reply"))
-        except Exception as e:
-            score = None
-    else:
-        raise HTTPException(status_code=400, detail="model 只能为 kimi 或 minimax")
-    if score is None:
-        raise HTTPException(status_code=500, detail="大模型未返回有效分数")
-    return {"similarity": score}
-
-@app.post("/reasonableness")
-def judge_reasonableness(req: ReasonRequest):
-    question = client.query("question:getQuestionById", dict(id=req.question_id))
-    if not question:
-        raise HTTPException(status_code=404, detail="未找到问题")
-    question_text = question["body"]
-    prompt = f"问题：{question_text}\n用户的回答：{req.user_text}\n请你用0到1的分数严格判定用户回答的合理性，1为完全合理，0为完全不合理，只返回分数，不要解释。"
-    # Kimi
-    client_kimi = OpenAI(
-        api_key = os.getenv("KIMI"),
-        base_url = "https://api.moonshot.cn/v1",
-    )
-    kimi_resp = client_kimi.chat.completions.create(
-        model = "kimi-k2-0711-preview",
-        messages = [
-            {"role": "system", "content": "你是一个严格的答案判分助手。"},
-            {"role": "user", "content": prompt}
-        ],
-        temperature = 0.3,
-    )
-    kimi_score = extract_score(kimi_resp.choices[0].message.content)
-    # MiniMax
-    group_id = os.getenv("MINIMAX_GROUP")
-    api_key = os.getenv("MINIMAX")
-    url = f"https://api.minimaxi.com/v1/text/chatcompletion_pro?GroupId={group_id}"
-    headers = {"Authorization":f"Bearer {api_key}", "Content-Type":"application/json"}
-    request_body = {
-        "model": "MiniMax-Text-01",
-        "tokens_to_generate": 1024,
-        "reply_constraints": {"sender_type": "BOT", "sender_name": "MM智能助理"},
-        "messages": [
-            {"sender_type": "USER", "sender_name": "小明", "text": prompt}
-        ],
-        "bot_setting": [
-            {
-                "bot_name": "MM智能助理",
-                "content": "MM智能助理是一款由MiniMax自研的，没有调用其他产品的接口的大型语言模型。MiniMax是一家中国科技公司，一直致力于进行大模型相关的研究。"
-            }
-        ],
-    }
-    minimax_score = None
-    try:
-        response = requests.post(url, headers=headers, json=request_body)
-        if response.status_code == 200:
-            minimax_score = extract_score(response.json().get("reply"))
-    except Exception as e:
-        minimax_score = None
-    # 均值
-    scores = [s for s in [kimi_score, minimax_score] if s is not None]
-    if not scores:
-        raise HTTPException(status_code=500, detail="两个模型都未返回有效分数")
-    avg = sum(scores) / len(scores)
-    if req.score_type == "int":
-        kimi_score = int(round(kimi_score * 100)) if kimi_score is not None else None
-        minimax_score = int(round(minimax_score * 100)) if minimax_score is not None else None
-        avg = int(round(avg * 100))
-    return {
-        "kimi_score": kimi_score,
-        "minimax_score": minimax_score,
-        "average": avg
-    }
 
 
 
@@ -455,8 +303,8 @@ def multi_similarity_reasonableness(req: MultiSimRequest):
 
 if __name__ == "__main__":
     # 测试用真实id
-    # test_question_id = "j972t9h03z1qe5ddv6b6ffyyqn7mccwh"
-    # user_text = "桂林市区出发→磨盘山码头/竹江码头→漓江精华段（杨堤-兴坪）→打卡20元人民币背景→兴坪古镇吃啤酒鱼→回市区。"
+    test_question_id = "j972t9h03z1qe5ddv6b6ffyyqn7mccwh"
+    user_text = "桂林市区出发→磨盘山码头/竹江码头→漓江精华段（杨堤-兴坪）→打卡20元人民币背景→兴坪古镇吃啤酒鱼→回市区。"
 
     # # 测试 multi_similarity_reasonableness
     # print("=== 测试多重相似度与合理性判定 ===")
